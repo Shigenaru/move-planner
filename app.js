@@ -75,7 +75,7 @@
     return {
       version: 1,
       settings: {
-        names: ['Shigenaru', 'Partner'],
+        names: ['', ''],
         dates: { start: todayISO(), keys: '2026-12-12', move: '2026-12-28', oldEnd: '2027-01-25' },
         addresses: { old: '', new: '' },
         profile, onboarded: false, updatedAt: 0,
@@ -103,7 +103,8 @@
   }
   const touch = (o) => { o.updatedAt = now(); return o; };
   const touchSettings = () => touch(S.settings);
-  const names = () => S.settings.names;
+  const defaultName = (i) => (i ? L('Partner', 'パートナー') : L('Me', '自分'));
+  const names = () => S.settings.names.map((n, i) => (n && n.trim() && !(i === 1 && n === 'Partner') ? n : defaultName(i)));
   const nameOf = (k) => (k === 'a' ? names()[0] : k === 'b' ? names()[1] : k === 'both' ? L('Both', '2人') : L('Anyone', '誰でも'));
   // Seeded rows keep their English text in the data; show them translated until edited.
   const SEED_JA = {
@@ -391,7 +392,7 @@
     return `
       <section class="hero">
         <div>
-          <p class="eyebrow">${esc(S.settings.names.join(' & '))} · ${L('Minato-ku → Shibuya-ku', '港区 → 渋谷区')}</p>
+          <p class="eyebrow">${esc(names().join(' & '))} · ${L('Minato-ku → Shibuya-ku', '港区 → 渋谷区')}</p>
           <h1>${moveIn > 0 ? L(`${moveIn} days until moving day`, `引越しまであと${moveIn}日`) : moveIn === 0 ? L('Moving day is today!', '今日は引越し日！') : L('Welcome home!', '新居へようこそ！')}</h1>
           <p class="muted">${L(`Moving day: ${fmt(d.move)}. ${done} of ${act.length} steps done. ${myOpen} open steps for ${esc(nameOf(me))}.`, `引越し日：${fmt(d.move)}。${act.length}件中${done}件完了。${esc(nameOf(me))}の残り：${myOpen}件。`)}</p>
           ${progress(done, act.length)}
@@ -709,8 +710,8 @@
       </section>
       <section class="card form">
         <h2>${L('The two of you', '2人について')}</h2>
-        <label><span>${L('Name 1', '名前1')}</span><input value="${esc(st.names[0])}" data-on="name" data-field="0" data-fk="name0"></label>
-        <label><span>${L('Name 2', '名前2')}</span><input value="${esc(st.names[1])}" data-on="name" data-field="1" data-fk="name1"></label>
+        <label><span>${L('Name 1', '名前1')}</span><input value="${esc(st.names[0])}" data-on="name" data-field="0" data-fk="name0" placeholder="${esc(defaultName(0))}"></label>
+        <label><span>${L('Name 2', '名前2')}</span><input value="${esc(st.names[1])}" data-on="name" data-field="1" data-fk="name1" placeholder="${esc(defaultName(1))}"></label>
         <p class="small muted">${L('“I am” (top right) is saved on this device only. It filters “my” steps.', '右上の「自分」はこの端末だけに保存され、自分のステップの絞り込みに使われます。')}</p>
       </section>
       ${moveDayPicker()}
@@ -802,8 +803,8 @@
     return `<div class="row between"><h2>${L('Welcome to your moving planner', '引越しプランナーへようこそ')}</h2><button class="btn small" data-act="lang" data-id="${lang === 'ja' ? 'en' : 'ja'}">${L('日本語', 'English')}</button></div>
       <p>${L('This plan covers every step of a move in Japan, from Minato-ku to Shibuya-ku: paperwork, utilities, customs and setting up the new home. A few questions tailor it to you.', '港区から渋谷区への引越しに必要なステップ（役所の手続き、電気・ガス・水道、日本の習慣、新居の準備）をすべてまとめています。いくつかの質問に答えると、2人に合わせたプランになります。')}</p>
       <div class="form">
-        <label><span>${L('Your name', 'あなたの名前')}</span><input value="${esc(st.names[0])}" data-on="name" data-field="0" data-fk="on-name0"></label>
-        <label><span>${L('Partner’s name', 'パートナーの名前')}</span><input value="${esc(st.names[1])}" data-on="name" data-field="1" data-fk="on-name1"></label>
+        <label><span>${L('Your name', 'あなたの名前')}</span><input value="${esc(st.names[0])}" data-on="name" data-field="0" data-fk="on-name0" placeholder="${esc(defaultName(0))}"></label>
+        <label><span>${L('Partner’s name', 'パートナーの名前')}</span><input value="${esc(st.names[1])}" data-on="name" data-field="1" data-fk="on-name1" placeholder="${esc(defaultName(1))}"></label>
         <label><span>${L('New lease starts', '新居の契約開始')}</span><input type="date" value="${st.dates.keys}" data-on="date" data-field="keys"></label>
         <label><span>${L('Moving day (you can change it later)', '引越し日（後で変更できます）')}</span><input type="date" value="${st.dates.move}" data-on="date" data-field="move"></label>
         <label><span>${L('Old lease ends', '旧居の契約終了')}</span><input type="date" value="${st.dates.oldEnd}" data-on="date" data-field="oldEnd"></label>
