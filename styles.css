@@ -259,3 +259,8 @@ td.split select { width: 100%; }
 .split-in { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
 .split-in input { width: 90px; }
 .split-sum { display: block; margin-top: 2px; white-space: nowrap; }
+
+/* multi-day steps */
+.chip.due.active { background: #E3EEE8; color: var(--ok); }
+.ev.rng { background: rgba(58, 125, 92, .12); color: #2F5E47; }
+.ev.rng.done { color: var(--text-muted); }

@@ -158,6 +158,7 @@
     if (rule.a === 'start' && d < todayISO() && diff(d, todayISO()) > 60) d = todayISO();
     return office ? officeAdjust(d, office) : d;
   }
+  const rangeFrom = (from, due) => (from && due && from < due ? from : '');
   function allSteps() {
     const lib = D.STEPS.map((s) => {
       const t = S.tasks[s.id] || {};
@@ -165,12 +166,14 @@
       const suggested = ruleDate(s.due, s.office);
       return Object.assign({}, s, {
         enabled, done: !!t.done, assign: t.assign ?? s.assign ?? 'both', due: t.due || suggested, suggested, phase: phaseOf(t.due || suggested),
+        fromRaw: t.from !== undefined ? t.from : ruleDate(s.span),
+        from: rangeFrom(t.from !== undefined ? t.from : ruleDate(s.span), t.due || suggested),
         noteIds: (t.noteIds || []).filter((id) => noteById(id)), memo: t.memo || '', custom: false,
         winFrom: s.win ? ruleDate(s.win.from) : '', hardDate: s.hard ? ruleDate(s.hard) : '',
       });
     });
     const custom = live(S.custom).map((c) => Object.assign({}, c, {
-      enabled: c.enabled !== false, done: !!c.done, custom: true, suggested: c.due, phase: phaseOf(c.due),
+      enabled: c.enabled !== false, done: !!c.done, custom: true, suggested: c.due, phase: phaseOf(c.due), fromRaw: c.from || '', from: rangeFrom(c.from, c.due),
       noteIds: (c.noteIds || []).filter((id) => noteById(id)), how: c.details ? c.details.split('\n').filter(Boolean) : [],
     }));
     return lib.concat(custom);
@@ -184,7 +187,10 @@
   function dueClass(s) {
     if (s.done || !s.due) return '';
     const n = diff(todayISO(), s.due);
-    return n < 0 ? 'overdue' : n === 0 ? 'today' : n <= 3 ? 'soon' : '';
+    if (n < 0) return 'overdue';
+    if (n === 0) return 'today';
+    if (n <= 3) return 'soon';
+    return s.from && s.from <= todayISO() ? 'active' : '';
   }
 
   // ---------- notes ----------
@@ -350,7 +356,7 @@
         <span class="step-title">${esc(s.title)}</span>
         ${s.ja ? `<span class="ja">${esc(s.ja)}</span>` : ''}
         <span class="meta">
-          ${s.due ? `<span class="chip due ${dueClass(s)}">${fmt(s.due)}${!s.done && dueClass(s) === 'overdue' ? L(' · overdue', '・期限切れ') : ''}</span>` : ''}
+          ${s.due ? `<span class="chip due ${dueClass(s)}">${s.from ? `${fmt(s.from)} → ` : ''}${fmt(s.due)}${!s.done && dueClass(s) === 'overdue' ? L(' · overdue', '・期限切れ') : ''}</span>` : ''}
           ${opts.phase ? `<span class="chip">${esc(phaseById(s.phase)?.title || '')}</span>` : ''}
           ${s.hardDate ? `<span class="chip warn">${L('Deadline', '期限')} ${fmt(s.hardDate)}</span>` : ''}
           ${notes.map((n) => { const it = noteItems(n); return `<span class="chip note">${esc(n.title)}${it.length ? ` ${it.filter((i) => i.done).length}/${it.length}` : ''}</span>`; }).join('')}
@@ -482,7 +488,10 @@
     const d = S.settings.dates;
     const steps = activeSteps();
     const byDay = {};
-    steps.forEach((s) => { if (s.due) (byDay[s.due] = byDay[s.due] || []).push(s); });
+    steps.forEach((s) => {
+      if (!s.due) return;
+      for (let x = s.from || s.due, g = 0; x <= s.due && g < 120; x = add(x, 1), g++) (byDay[x] = byDay[x] || []).push(s);
+    });
     const keyLabel = { [d.keys]: L('Keys', '鍵'), [d.move]: L('Move', '引越し'), [d.oldEnd]: L('Lease ends', '契約終了') };
     const start = toD(d.start < '2026-12-01' ? d.start : '2026-12-01');
     const endD = toD(add(d.oldEnd, 31));
@@ -497,13 +506,13 @@
       for (let i = 0; i < first.getUTCDay(); i++) cells += '<div class="cell blank"></div>';
       for (let day = 1; day <= dim; day++) {
         const x = `${y}-${pad(m + 1)}-${pad(day)}`;
-        const items = (byDay[x] || []).sort((a, b) => a.done - b.done);
+        const items = (byDay[x] || []).slice().sort((a, b) => (a.due !== x) - (b.due !== x) || a.done - b.done);
         const cls = [isYearEnd(x) ? 'closed' : '', x === t ? 'today' : '', x === sel ? 'sel' : '', keyLabel[x] ? 'key' : '', x > d.keys && x < d.oldEnd && x <= d.oldEnd ? 'overlap' : '', D.HOLIDAYS[x] || toD(x).getUTCDay() === 0 ? 'hol' : ''].join(' ');
         cells += `<button class="cell ${cls}" data-act="calDay" data-id="${x}">
           <span class="dn">${day}</span>
           ${keyLabel[x] ? `<span class="kl">${keyLabel[x]}</span>` : ''}
           ${D.HOLIDAYS[x] ? `<span class="hl">${esc(D.HOLIDAYS[x])}</span>` : ''}
-          ${items.slice(0, 3).map((s) => `<span class="ev ${s.done ? 'done' : ''}">${esc(s.title)}</span>`).join('')}
+          ${items.slice(0, 3).map((s) => `<span class="ev ${s.done ? 'done' : ''} ${s.due !== x ? 'rng' : ''}">${esc(s.title)}</span>`).join('')}
           ${items.length > 3 ? `<span class="ev more">+${items.length - 3}</span>` : ''}
           ${items.length ? `<span class="dots">${items.map((s) => `<i class="${s.done ? 'done' : ''}"></i>`).join('')}</span>` : ''}
         </button>`;
@@ -744,7 +753,8 @@
       </header>
       <div class="sheet-controls">
         <label class="switch"><input type="checkbox" data-act="toggleDone" data-id="${s.id}" ${s.done ? 'checked' : ''} ${s.enabled ? '' : 'disabled'}> ${L('Done', '完了')}</label>
-        <label><span class="small muted">${L('Due', '期日')}</span><input type="date" value="${s.due || ''}" data-on="stepDue" data-id="${s.id}">${!s.custom && st.due ? `<button class="link small" data-act="resetDue" data-id="${s.id}">${L(`reset to ${fmt(s.suggested)}`, `${fmt(s.suggested)} に戻す`)}</button>` : ''}</label>
+        <label><span class="small muted">${L('Start (optional)', '開始日（任意）')}</span><input type="date" value="${s.fromRaw || ''}" data-on="stepFrom" data-id="${s.id}">${s.fromRaw ? `<button class="link small" data-act="clearFrom" data-id="${s.id}">${L('make it one day', '1日だけにする')}</button>` : ''}${s.fromRaw && !s.from ? `<span class="small warn-text">${L('Start must be before the end date.', '開始日は終了日より前にしてください。')}</span>` : ''}</label>
+        <label><span class="small muted">${s.from ? L('End', '終了日') : L('Due', '期日')}</span><input type="date" value="${s.due || ''}" data-on="stepDue" data-id="${s.id}">${!s.custom && st.due ? `<button class="link small" data-act="resetDue" data-id="${s.id}">${L(`reset to ${fmt(s.suggested)}`, `${fmt(s.suggested)} に戻す`)}</button>` : ''}</label>
         <label><span class="small muted">${L('Who', '担当')}</span><select data-on="stepAssign" data-id="${s.id}">${['both', 'a', 'b', ''].map((k) => `<option value="${k}" ${s.assign === k ? 'selected' : ''}>${esc(nameOf(k))}</option>`).join('')}</select></label>
         <button class="btn small ${s.enabled ? 'ghost' : 'primary'}" data-act="${s.enabled ? 'skip' : 'include'}" data-id="${s.id}">${s.enabled ? L('Skip this step', 'このステップをスキップ') : L('Include this step', 'このステップを戻す')}</button>
       </div>
@@ -854,6 +864,7 @@
     },
     delCustom: (el) => { if (!confirm(L('Delete this step?', 'このステップを削除しますか？'))) return; setStepField(el.dataset.id, 'deleted', true); ui.modal = null; },
     resetDue: (el) => setStepField(el.dataset.id, 'due', ''),
+    clearFrom: (el) => setStepField(el.dataset.id, 'from', ''),
     createNote: (el) => { const s = stepById(el.dataset.id); const n = newNote(el.dataset.tpl); if (!el.dataset.tpl) { n.title = s.title; n.body = ''; } linkNote(s, n.id); ui.modal = null; location.hash = '#note/' + n.id; },
     unlink: (el) => { const s = stepById(el.dataset.id); const st = stepState(s); st.noteIds = (st.noteIds || []).filter((x) => x !== el.dataset.note); touch(st); },
     newNote: () => { const n = newNote(); location.hash = '#note/' + n.id; },
@@ -893,6 +904,7 @@
     addr: (el) => { S.settings.addresses = S.settings.addresses || {}; S.settings.addresses[el.dataset.field] = el.value; touchSettings(); return false; },
     name: (el, ev) => { S.settings.names[Number(el.dataset.field)] = el.value; touchSettings(); return ev.type === 'change'; },
     date: (el, ev) => { if (!el.value) return false; S.settings.dates[el.dataset.field] = el.value; touchSettings(); return ev.type === 'change'; },
+    stepFrom: (el, ev) => { setStepField(el.dataset.id, 'from', el.value); return ev.type === 'change'; },
     stepDue: (el, ev) => { setStepField(el.dataset.id, 'due', el.value); return ev.type === 'change'; },
     stepAssign: (el) => { setStepField(el.dataset.id, 'assign', el.value); return true; },
     stepMemo: (el) => { setStepField(el.dataset.id, 'memo', el.value); return false; },

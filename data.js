@@ -1,6 +1,7 @@
 // Step library for a move inside Tokyo (Minato-ku -> Shibuya-ku).
 // Due dates are relative to anchors: start (plan created), keys (new lease start),
 // move (moving day), oldEnd (old lease end). office: shift to an open ward-office day.
+// span: optional start of a multi-day step (due is then the end date).
 (function () {
   const G = (q) => 'https://www.google.com/search?q=' + encodeURIComponent(q);
 
@@ -36,7 +37,7 @@
     },
     {
       id: 'mover-quotes', phase: 'book', title: 'Get quotes from moving companies', ja: '引越し業者の相見積もり',
-      def: true, due: { a: 'start', o: 5 }, assign: 'both', note: 'quotes',
+      def: true, span: { a: 'start', o: 0 }, due: { a: 'start', o: 5 }, assign: 'both', note: 'quotes',
       why: 'The last week of December is peak season (繁忙期). Popular slots go early and prices rise. Comparing 2–3 quotes (相見積もり) usually lowers the price a lot.',
       how: [
         'Use a comparison site (引越し侍, SUUMO引越し見積もり) or contact companies directly (アート, サカイ, 日通, アリさん…).',
@@ -107,7 +108,7 @@
     },
     {
       id: 'dispose-plan', phase: 'book', title: 'Decide what to throw away, sell or give away', ja: '不用品の処分（粗大ごみ・売却）',
-      def: true, due: { a: 'start', o: 10 }, assign: 'both', note: 'dispose',
+      def: true, span: { a: 'start', o: 0 }, due: { a: 'start', o: 10 }, assign: 'both', note: 'dispose',
       why: 'Oversized garbage (粗大ごみ) needs a reservation and fills up before year end. Selling takes time too, so start early.',
       how: [
         'List the items in the linked note.',
@@ -189,7 +190,7 @@
     },
     {
       id: 'purchase', phase: 'setup', title: 'Buy furniture and essentials', ja: '家具・家電・日用品の購入',
-      def: true, due: { a: 'move', o: -12 }, assign: 'both', note: 'shopping',
+      def: true, span: { a: 'start', o: 0 }, due: { a: 'move', o: -12 }, assign: 'both', note: 'shopping',
       why: 'Having a bed, curtains and lights in before moving day makes the first night comfortable.',
       how: ['Use the linked shopping list. Mark items as bought and add prices.', 'Buy bulky items for delivery straight to the new address during the overlap.', 'Check the year-end delivery cutoffs (IKEA, ニトリ, Amazon, 家電量販店).'],
     },
@@ -278,7 +279,7 @@
     },
     {
       id: 'pack', phase: 'premove', title: 'Pack', ja: '荷造り',
-      def: true, due: { a: 'move', o: -1 }, assign: 'both', note: 'packing',
+      def: true, span: { a: 'move', o: -14 }, due: { a: 'move', o: -1 }, assign: 'both', note: 'packing',
       how: [
         'Start with things you rarely use. Label each box with its room and contents (e.g. 「寝室・本」).',
         'Pack an "open first" box (すぐ使う箱): toilet paper, towels, chargers, tools, bedding, medicine and glasses.',
@@ -397,12 +398,12 @@
     },
     {
       id: 'banks', phase: 'after', title: 'Update banks, cards and insurance', ja: '銀行・クレジットカード・保険の住所変更',
-      def: true, due: { a: 'move', o: 14 }, assign: 'both', note: 'addresses',
+      def: true, span: { a: 'move', o: 0 }, due: { a: 'move', o: 14 }, assign: 'both', note: 'addresses',
       how: ['Most can be done online or in the app. Track them in the linked checklist.', 'Remember your securities account, life and medical insurance, and the fire insurance on the new home.'],
     },
     {
       id: 'services', phase: 'after', title: 'Update phone and online accounts', ja: '携帯・通販・各種サービスの住所変更',
-      def: true, due: { a: 'move', o: 14 }, assign: 'both', note: 'addresses',
+      def: true, span: { a: 'move', o: 0 }, due: { a: 'move', o: 14 }, assign: 'both', note: 'addresses',
       how: ['Your mobile carrier, Amazon/楽天 delivery addresses, food delivery, subscriptions, ふるさと納税, gym, clinics and point cards.'],
     },
     {
