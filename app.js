@@ -164,18 +164,21 @@
       const t = S.tasks[s.id] || {};
       const enabled = t.enabled ?? (s.cond ? !!S.settings.profile[s.cond] : s.def);
       const suggested = ruleDate(s.due, s.office);
-      return Object.assign({}, s, {
-        enabled, done: !!t.done, assign: t.assign ?? s.assign ?? 'both', due: t.due || suggested, suggested, phase: phaseOf(t.due || suggested),
+      const step = Object.assign({}, s, {
+        enabled, done: !!t.done, assign: t.assign ?? s.assign ?? 'both', due: t.due || suggested, suggested,
         fromRaw: t.from !== undefined ? t.from : ruleDate(s.span),
         from: rangeFrom(t.from !== undefined ? t.from : ruleDate(s.span), t.due || suggested),
         noteIds: (t.noteIds || []).filter((id) => noteById(id)), memo: t.memo || '', custom: false,
         winFrom: s.win ? ruleDate(s.win.from) : '', hardDate: s.hard ? ruleDate(s.hard) : '',
       });
+      step.phase = phaseOf(step.from || step.due);
+      return step;
     });
     const custom = live(S.custom).map((c) => Object.assign({}, c, {
-      enabled: c.enabled !== false, done: !!c.done, custom: true, suggested: c.due, phase: phaseOf(c.due), fromRaw: c.from || '', from: rangeFrom(c.from, c.due),
+      enabled: c.enabled !== false, done: !!c.done, custom: true, suggested: c.due, fromRaw: c.from || '', from: rangeFrom(c.from, c.due),
       noteIds: (c.noteIds || []).filter((id) => noteById(id)), how: c.details ? c.details.split('\n').filter(Boolean) : [],
     }));
+    custom.forEach((c) => (c.phase = phaseOf(c.from || c.due)));
     return lib.concat(custom);
   }
   const stepState = (step) => (step.custom ? S.custom.find((c) => c.id === step.id) : ts(step.id));
@@ -183,6 +186,7 @@
   const noteById = (id) => S.notes.find((n) => n.id === id && !n.deleted);
   const activeSteps = () => allSteps().filter((s) => s.enabled);
   const sortByDue = (a, b) => (a.due || '9999').localeCompare(b.due || '9999');
+  const sortByStart = (a, b) => (a.from || a.due || '9999').localeCompare(b.from || b.due || '9999') || sortByDue(a, b);
 
   function dueClass(s) {
     if (s.done || !s.due) return '';
@@ -465,7 +469,7 @@
         <label class="switch"><input type="checkbox" data-act="toggleSkipped" ${ui.showSkipped ? 'checked' : ''}> ${L('Show skipped steps', 'スキップしたものも表示')}</label>
       </div>
       ${phases().map((p) => {
-        const ps = list.filter((s) => s.phase === p.id).sort(sortByDue);
+        const ps = list.filter((s) => s.phase === p.id).sort(sortByStart);
         const all = act.filter((s) => s.phase === p.id);
         const open = !collapsed[p.id] || !!ui.q.trim();
         const dn = all.filter((s) => s.done).length;
