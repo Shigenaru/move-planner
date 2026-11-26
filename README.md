@@ -9,6 +9,7 @@ A moving planner for two people moving in Tokyo. It runs in the browser, with no
 - **Calendar**: shows key dates, the overlap period, the overlap period and office closures.
 - **Budget**: estimates vs. actual costs, plus a 50/50 "settle up" for shared costs.
 - **Info**: addresses (with copy buttons), contacts and confirmation numbers.
+- **Language**: Japanese by default, with a 日本語/English switch in the header (saved per device).
 - **Live sync**: sign in with Google and both phones show the same plan, updated live (Firebase Firestore). For each item, the newest change wins. Export/import of a backup file is still available.
 
 ## Run it
@@ -29,5 +30,6 @@ Data is kept in the browser's `localStorage` and, when signed in, in one Firesto
 - `index.html`: the page layout
 - `styles.css`: the styles
 - `data.js`: the step library, note templates and holidays (edit steps here)
+- `data.ja.js`: Japanese text for the step library and note templates
 - `app.js`: the app logic
 - `sync.js` / `firebase-config.js`: live sync (Google sign-in + Firestore)

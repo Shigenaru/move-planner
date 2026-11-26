@@ -7,7 +7,7 @@ const DOC = ['plans', 'shared'];
 
 function refresh() { P.render(); }
 
-if (Z.configured) start().catch(() => { Z.state = 'error'; Z.error = 'Could not connect. Check your internet connection.'; refresh(); });
+if (Z.configured) start().catch(() => { Z.state = 'error'; Z.error = P.L('Could not connect. Check your internet connection.', '接続できませんでした。インターネット接続を確認してください。'); refresh(); });
 refresh();
 
 async function start() {
@@ -23,7 +23,7 @@ async function start() {
   let unsub = null, timer = null, busy = false, again = false;
 
   const friendly = (e) => (e && e.code === 'permission-denied'
-    ? 'This Google account is not allowed to open the plan. Sign in with one of your two accounts.'
+    ? P.L('This Google account is not allowed to open the plan. Sign in with one of your two accounts.', 'このGoogleアカウントではプランを開けません。2人のどちらかのアカウントでログインしてください。')
     : (e && e.message) || String(e));
 
   async function pushNow() {

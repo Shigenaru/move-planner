@@ -236,3 +236,10 @@ body.locked .nav, body.locked .me, body.locked .sync { display: none; }
 /* key dates editor */
 .datefields { display: grid; grid-template-columns: 1fr; gap: 8px; }
 @media (min-width: 700px) { .datefields { grid-template-columns: repeat(3, 1fr); } }
+
+/* language toggle */
+.lang-btn { margin-right: 10px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.top .brand { margin-right: auto; }
+.top .sync { margin-left: 0; }
+.brand span { white-space: nowrap; }
+@media (max-width: 480px) { .top .brand span { display: none; } .me .seg button { max-width: 88px; overflow: hidden; text-overflow: ellipsis; } }

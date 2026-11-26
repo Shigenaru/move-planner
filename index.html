@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="ja">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -15,13 +15,15 @@
   <header class="top">
     <a class="brand" href="#home"><img src="icon.svg" alt="" width="28" height="28"><span>Our Move</span></a>
     <a id="sync" class="sync" href="#settings" hidden></a>
-    <div class="me"><span class="small muted">I am</span><div class="seg" id="me"></div></div>
+    <button id="lang" class="lang-btn" data-act="lang" type="button">EN</button>
+    <div class="me"><span class="small muted" id="iam">自分</span><div class="seg" id="me"></div></div>
   </header>
   <nav id="nav" class="nav" aria-label="Main"></nav>
   <main id="view"></main>
   <div id="modal"></div>
   <div id="saved" class="saved" aria-live="polite"></div>
   <script src="data.js"></script>
+  <script src="data.ja.js"></script>
   <script src="firebase-config.js"></script>
   <script src="app.js"></script>
   <script type="module" src="sync.js"></script>
