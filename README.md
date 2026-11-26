@@ -12,6 +12,10 @@ A moving planner for two people moving in Tokyo. It runs in the browser, with no
 - **Language**: Japanese by default, with a 日本語/English switch in the header (saved per device).
 - **Live sync**: sign in with Google and both phones show the same plan, updated live (Firebase Firestore). For each item, the newest change wins. Export/import of a backup file is still available.
 
+## New to all this?
+
+Start with [How this app works](docs/beginners-guide.md) and [Making changes safely](docs/making-changes.md).
+
 ## Run it
 
 Open `index.html` in a browser, or serve the folder:
