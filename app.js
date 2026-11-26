@@ -201,7 +201,7 @@
     S.notes.push(n);
     return n;
   }
-  const noteItems = (n) => live(n.items || []);
+  const noteItems = (n) => live(n.items || []).map((i, k) => [i, i.ord ?? k]).sort((p, q) => p[1] - q[1]).map((x) => x[0]);
   const notePrice = (n, onlyDone) => noteItems(n).filter((i) => !onlyDone || i.done).reduce((a, i) => a + (Number(i.price) || 0) * (Number(i.qty) || 1), 0);
   const linkedSteps = (noteId) => allSteps().filter((s) => s.noteIds.includes(noteId));
   function linkNote(step, noteId) {
@@ -392,7 +392,6 @@
           ${progress(done, act.length)}
         </div>
       </section>
-      ${moveDayPicker()}
       <section class="keydates">
         ${keyCards.map(([l, date, sub]) => `<div class="card kd ${date === d.move ? 'accent' : ''}"><span class="muted small">${l}</span><strong>${fmt(date)}</strong><span class="small">${relDays(date)}</span>${sub ? `<span class="muted small">${esc(sub)}</span>` : ''}</div>`).join('')}
       </section>
@@ -431,7 +430,7 @@
     const overlap = diff(d.keys, d.oldEnd);
     return `<section class="card form">
       <h2>${L('Key dates', '大事な日付')}</h2>
-      <div class="datefields">${field('move', L('Moving day', '引越し日'))}${field('keys', L('New lease starts', '新居の契約開始'))}${field('oldEnd', L('Old lease ends', '旧居の契約終了'))}</div>
+      <div class="datefields">${field('move', L('Moving day', '引越し日'))}${field('keys', L('New lease starts', '新居の契約開始'))}${field('oldEnd', L('Old lease ends', '旧居の契約終了'))}${field('start', L('Plan start (for “book now” steps)', 'プラン開始日（「今すぐ予約」系の基準）'))}</div>
       ${warn.map((w) => `<p class="small warn-text">${esc(w)}</p>`).join('')}
       <p class="muted small">${overlap > 0 ? L(`You have both homes for ${overlap} days. `, `2つの家がある期間：${overlap}日。`) : ''}${L('Change a date and every step’s suggested date moves with it. Dates you set by hand on a step stay as they are.', '日付を変えると、各ステップの目安日も自動で変わります。手動で設定した日付はそのままです。')}</p>
     </section>`;
@@ -499,25 +498,43 @@
     for (let y = start.getUTCFullYear(), m = start.getUTCMonth(); y < endD.getUTCFullYear() || (y === endD.getUTCFullYear() && m <= endD.getUTCMonth()); m === 11 ? (y++, (m = 0)) : m++) months.push([y, m]);
     const t = todayISO();
     const sel = ui.calDay;
+    const ranges = steps.filter((s) => s.from && s.due);
     const cal = months.map(([y, m]) => {
-      const first = new Date(Date.UTC(y, m, 1));
       const dim = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
-      let cells = '';
-      for (let i = 0; i < first.getUTCDay(); i++) cells += '<div class="cell blank"></div>';
-      for (let day = 1; day <= dim; day++) {
-        const x = `${y}-${pad(m + 1)}-${pad(day)}`;
-        const items = (byDay[x] || []).slice().sort((a, b) => (a.due !== x) - (b.due !== x) || a.done - b.done);
-        const cls = [isYearEnd(x) ? 'closed' : '', x === t ? 'today' : '', x === sel ? 'sel' : '', keyLabel[x] ? 'key' : '', x > d.keys && x < d.oldEnd && x <= d.oldEnd ? 'overlap' : '', D.HOLIDAYS[x] || toD(x).getUTCDay() === 0 ? 'hol' : ''].join(' ');
-        cells += `<button class="cell ${cls}" data-act="calDay" data-id="${x}">
-          <span class="dn">${day}</span>
-          ${keyLabel[x] ? `<span class="kl">${keyLabel[x]}</span>` : ''}
-          ${D.HOLIDAYS[x] ? `<span class="hl">${esc(D.HOLIDAYS[x])}</span>` : ''}
-          ${items.slice(0, 3).map((s) => `<span class="ev ${s.done ? 'done' : ''} ${s.due !== x ? 'rng' : ''}">${esc(s.title)}</span>`).join('')}
-          ${items.length > 3 ? `<span class="ev more">+${items.length - 3}</span>` : ''}
-          ${items.length ? `<span class="dots">${items.map((s) => `<i class="${s.done ? 'done' : ''}"></i>`).join('')}</span>` : ''}
-        </button>`;
-      }
-      return `<section class="month"><h2>${monthTitle(y, m)}</h2><div class="grid">${(lang === 'ja' ? WD_JA : WD_EN).map((w) => `<div class="wh">${w}</div>`).join('')}${cells}</div></section>`;
+      const first = `${y}-${pad(m + 1)}-01`, last = `${y}-${pad(m + 1)}-${pad(dim)}`;
+      const weeks = [];
+      for (let ws = add(first, -toD(first).getUTCDay()); ws <= last; ws = add(ws, 7)) weeks.push(ws);
+      const body = weeks.map((ws) => {
+        const lo = ws < first ? first : ws;
+        const we = add(ws, 6), hi = we > last ? last : we;
+        // Multi-day steps become one bar per week; stack overlapping bars in lanes.
+        const segs = ranges.filter((s) => s.from <= hi && s.due >= lo)
+          .map((s) => ({ s, a: s.from < lo ? lo : s.from, b: s.due > hi ? hi : s.due, cl: s.from < lo, cr: s.due > hi }))
+          .sort((p, q) => p.a.localeCompare(q.a) || diff(q.a, q.b) - diff(p.a, p.b));
+        const lanes = [];
+        segs.forEach((g) => { let i = lanes.findIndex((end) => end < g.a); if (i < 0) { i = lanes.length; lanes.push(''); } lanes[i] = g.b; g.lane = i; });
+        const col = (x) => diff(ws, x) + 1;
+        const lastRow = lanes.length + 2;
+        let html = '';
+        for (let i = 0; i < 7; i++) {
+          const x = add(ws, i);
+          if (x < first || x > last) { html += `<div class="cell blank" style="grid-column:${i + 1};grid-row:1 / ${lastRow + 1}"></div>`; continue; }
+          const singles = (byDay[x] || []).filter((s) => !s.from).sort((a, b) => a.done - b.done);
+          const cls = [isYearEnd(x) ? 'closed' : '', x === t ? 'today' : '', x === sel ? 'sel' : '', keyLabel[x] ? 'key' : '', x > d.keys && x < d.oldEnd ? 'overlap' : '', D.HOLIDAYS[x] || toD(x).getUTCDay() === 0 ? 'hol' : ''].join(' ');
+          html += `<button class="cell ${cls}" style="grid-column:${i + 1};grid-row:1 / ${lastRow + 1}" data-act="calDay" data-id="${x}" aria-label="${fmt(x)}"></button>
+            <div class="dayhead ${cls}" style="grid-column:${i + 1};grid-row:1"><span class="dn">${toD(x).getUTCDate()}</span>${keyLabel[x] ? `<span class="kl">${keyLabel[x]}</span>` : ''}${D.HOLIDAYS[x] ? `<span class="hl">${esc(D.HOLIDAYS[x])}</span>` : ''}</div>
+            <div class="singles" style="grid-column:${i + 1};grid-row:${lastRow}">
+              ${singles.slice(0, 3).map((s) => `<span class="ev ${s.done ? 'done' : ''}">${esc(s.title)}</span>`).join('')}
+              ${singles.length > 3 ? `<span class="ev more">+${singles.length - 3}</span>` : ''}
+              ${singles.length ? `<span class="dots">${singles.map((s) => `<i class="${s.done ? 'done' : ''}"></i>`).join('')}</span>` : ''}
+            </div>`;
+        }
+        segs.forEach((g) => {
+          html += `<button class="bar-ev ${g.s.done ? 'done' : ''} ${g.cl ? 'cl' : ''} ${g.cr ? 'cr' : ''}" style="grid-column:${col(g.a)} / ${col(g.b) + 1};grid-row:${g.lane + 2}" data-act="openStep" data-id="${g.s.id}" title="${esc(g.s.title)} ${fmt(g.s.from)} → ${fmt(g.s.due)}">${esc(g.s.title)}</button>`;
+        });
+        return `<div class="week" style="grid-template-rows:auto ${lanes.length ? `repeat(${lanes.length}, auto) ` : ''}1fr">${html}</div>`;
+      }).join('');
+      return `<section class="month"><h2>${monthTitle(y, m)}</h2><div class="grid">${(lang === 'ja' ? WD_JA : WD_EN).map((w) => `<div class="wh">${w}</div>`).join('')}</div>${body}</section>`;
     }).join('');
     const selList = sel ? (byDay[sel] || []) : [];
     return `
@@ -563,7 +580,8 @@
     const grouped = tags.map((tag) => [tag, it.filter((i) => (i.tag || '') === tag)]);
     const linked = linkedSteps(n.id);
     const total = notePrice(n), bought = notePrice(n, true);
-    const row = (i) => `<div class="item ${i.done ? 'done' : ''}">
+    const handle = (kind) => `<span class="drag" data-drag="${kind}" data-id="${n.id}" title="${L('Drag to reorder', 'ドラッグして並べ替え')}" aria-hidden="true">⋮⋮</span>`;
+    const row = (i) => `<div class="item ${i.done ? 'done' : ''}" data-item="${i.id}">${handle('item')}
         <input type="checkbox" data-act="itemDone" data-id="${n.id}" data-item="${i.id}" ${i.done ? 'checked' : ''} aria-label="${L('Done', '完了')}">
         <input class="grow" value="${esc(i.text)}" placeholder="${L('Item', '項目')}" data-on="item" data-field="text" data-id="${n.id}" data-item="${i.id}" data-fk="it-${i.id}-text">
         <input class="tag" value="${esc(i.tag)}" placeholder="${L('Group', 'グループ')}" data-on="item" data-field="tag" data-id="${n.id}" data-item="${i.id}" data-fk="it-${i.id}-tag" list="taglist">
@@ -579,7 +597,7 @@
         <textarea rows="3" placeholder="${L('Write anything…', '自由にメモ…')}" data-on="noteField" data-field="body" data-id="${n.id}" data-fk="note-body">${esc(n.body)}</textarea>
         ${linked.length ? `<p class="small">${L('Linked to:', 'リンク先：')} ${linked.map((s) => `<button class="chip note" data-act="openStep" data-id="${s.id}">${esc(s.title)}</button>`).join(' ')}</p>` : `<p class="small muted">${L('Not linked to a step yet. Open a step and choose this note to link it.', 'まだステップにリンクされていません。ステップを開いてこのメモを選ぶとリンクできます。')}</p>`}
         <div class="items">
-          ${grouped.map(([tag, rows]) => `${tag ? `<h3>${esc(tag)} <span class="muted small">${rows.filter((i) => i.done).length}/${rows.length}</span></h3>` : ''}${rows.map(row).join('')}`).join('')}
+          ${grouped.map(([tag, rows]) => `<div class="group" data-tag="${esc(tag)}">${tag || grouped.length > 1 ? `<h3>${handle('group')}${tag ? esc(tag) : L('Other', 'その他')} <span class="muted small">${rows.filter((i) => i.done).length}/${rows.length}</span></h3>` : ''}${rows.map(row).join('')}</div>`).join('')}
         </div>
         <datalist id="taglist">${tags.filter(Boolean).map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
         <div class="row gap"><button class="btn" data-act="addItem" data-id="${n.id}">${L('+ Add item', '＋ 項目を追加')}</button>${it.some((i) => i.done) ? `<button class="btn ghost small" data-act="clearDone" data-id="${n.id}">${L('Remove checked', 'チェック済みを削除')}</button>` : ''}</div>
@@ -677,7 +695,6 @@
   // ----- Settings -----
   function vSettings() {
     const st = S.settings;
-    const dateField = (k, l) => `<label><span>${l}</span><input type="date" value="${st.dates[k]}" data-on="date" data-field="${k}"></label>`;
     return `
       <div class="page-head"><div><h1>${L('Settings', '設定')}</h1></div></div>
       <section class="card form">
@@ -691,11 +708,7 @@
         <label><span>${L('Name 2', '名前2')}</span><input value="${esc(st.names[1])}" data-on="name" data-field="1" data-fk="name1"></label>
         <p class="small muted">${L('“I am” (top right) is saved on this device only. It filters “my” steps.', '右上の「自分」はこの端末だけに保存され、自分のステップの絞り込みに使われます。')}</p>
       </section>
-      <section class="card form">
-        <h2>${L('Key dates', '大事な日付')}</h2>
-        ${dateField('keys', L('New lease starts / keys', '新居の契約開始・鍵'))}${dateField('move', L('Moving day', '引越し日'))}${dateField('oldEnd', L('Old lease ends', '旧居の契約終了'))}${dateField('start', L('Plan start (for “book now” steps)', 'プラン開始日（「今すぐ予約」系の基準）'))}
-        <p class="small muted">${L('Step dates follow these. Dates you set by hand on a step stay as they are.', 'ステップの日付はこれに連動します。手動で設定した日付はそのままです。')}</p>
-      </section>
+      ${moveDayPicker()}
       <section class="card form">
         <h2>${L('Tailor the plan', 'プランを調整')}</h2>
         ${profileForm()}
@@ -869,7 +882,7 @@
     unlink: (el) => { const s = stepById(el.dataset.id); const st = stepState(s); st.noteIds = (st.noteIds || []).filter((x) => x !== el.dataset.note); touch(st); },
     newNote: () => { const n = newNote(); location.hash = '#note/' + n.id; },
     delNote: (el) => { if (!confirm(L('Delete this note?', 'このメモを削除しますか？'))) return; touch(noteById(el.dataset.id)).deleted = true; location.hash = '#notes'; },
-    addItem: (el) => { const n = noteById(el.dataset.id); const last = noteItems(n).slice(-1)[0]; const i = touch({ id: uid(), text: '', tag: last ? last.tag : '', done: false, qty: '', price: '' }); n.items.push(i); touch(n); setTimeout(() => document.querySelector(`[data-fk="it-${i.id}-text"]`)?.focus(), 0); },
+    addItem: (el) => { const n = noteById(el.dataset.id); const last = noteItems(n).slice(-1)[0]; const i = touch({ id: uid(), text: '', tag: last ? last.tag : '', done: false, qty: '', price: '', ord: Math.max(-1, ...live(n.items).map((x, k) => x.ord ?? k)) + 1 }); n.items.push(i); touch(n); setTimeout(() => document.querySelector(`[data-fk="it-${i.id}-text"]`)?.focus(), 0); },
     itemDone: (el) => { const n = noteById(el.dataset.id); touch(n.items.find((i) => i.id === el.dataset.item)).done = el.checked; touch(n); },
     delItem: (el) => { const n = noteById(el.dataset.id); touch(n.items.find((i) => i.id === el.dataset.item)).deleted = true; touch(n); },
     clearDone: (el) => { const n = noteById(el.dataset.id); noteItems(n).filter((i) => i.done).forEach((i) => (touch(i).deleted = true)); touch(n); },
@@ -938,6 +951,61 @@
   };
   document.addEventListener('input', onInput);
   document.addEventListener('change', onInput);
+  // Drag to reorder list items and groups. Pointer events work for both mouse and touch.
+  let drag = null;
+  document.addEventListener('pointerdown', (e) => {
+    const h = e.target.closest('[data-drag]');
+    if (!h) return;
+    const el = h.dataset.drag === 'group' ? h.closest('.group') : h.closest('.item');
+    if (!el) return;
+    e.preventDefault();
+    drag = { type: h.dataset.drag, el, noteId: h.dataset.id, box: el.closest('.items') };
+    el.classList.add('dragging');
+    document.body.classList.add('is-dragging');
+    try { h.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+  });
+  document.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    e.preventDefault();
+    if (e.clientY < 80) window.scrollBy(0, -12); else if (e.clientY > innerHeight - 100) window.scrollBy(0, 12);
+    const over = document.elementFromPoint(e.clientX, e.clientY);
+    if (!over || drag.el.contains(over)) return;
+    const before = (node) => { const r = node.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; };
+    if (drag.type === 'group') {
+      const g = over.closest('.group');
+      if (g && g.parentNode === drag.box) drag.box.insertBefore(drag.el, before(g) ? g : g.nextSibling);
+      return;
+    }
+    const it = over.closest('.item');
+    if (it && drag.box.contains(it)) { it.parentNode.insertBefore(drag.el, before(it) ? it : it.nextSibling); return; }
+    const g = over.closest('.group');
+    if (g && g.parentNode === drag.box) { const h3 = g.querySelector('h3'); if (h3 && h3.contains(over)) h3.after(drag.el); else g.appendChild(drag.el); }
+  }, { passive: false });
+  function endDrag() {
+    if (!drag) return;
+    const { el, noteId, box } = drag;
+    drag = null;
+    el.classList.remove('dragging');
+    document.body.classList.remove('is-dragging');
+    const n = noteById(noteId);
+    if (n) {
+      let k = 0;
+      box.querySelectorAll('.group').forEach((g) => {
+        const tag = g.dataset.tag || '';
+        g.querySelectorAll('.item').forEach((row) => {
+          const i = n.items.find((x) => x.id === row.dataset.item);
+          if (!i) return;
+          if (i.ord !== k || (i.tag || '') !== tag) { i.ord = k; i.tag = tag; touch(i); }
+          k++;
+        });
+      });
+      touch(n);
+      save();
+    }
+    render();
+  }
+  document.addEventListener('pointerup', endDrag);
+  document.addEventListener('pointercancel', endDrag);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ui.modal) { ui.modal = null; render(); } });
   window.addEventListener('hashchange', () => { window.scrollTo(0, 0); render(); });
   window.addEventListener('storage', (e) => { if (e.key === KEY) { S = load(); render(); } });
