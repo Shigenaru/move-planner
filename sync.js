@@ -7,7 +7,7 @@ const DOC = ['plans', 'shared'];
 
 function refresh() { P.render(); }
 
-if (Z.configured) start().catch((e) => { Z.state = 'error'; Z.error = 'Could not load sync: ' + e.message; refresh(); });
+if (Z.configured) start().catch(() => { Z.state = 'error'; Z.error = 'Could not connect. Check your internet connection.'; refresh(); });
 refresh();
 
 async function start() {
@@ -58,22 +58,26 @@ async function start() {
       try { await A.signInWithPopup(auth, new A.GoogleAuthProvider()); }
       catch (e) { if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') { Z.error = friendly(e); refresh(); } }
     },
-    signOut() { return A.signOut(auth); },
+    async signOut() { await A.signOut(auth); P.clearLocal(); refresh(); },
   };
 
   A.onAuthStateChanged(auth, (u) => {
     if (unsub) { unsub(); unsub = null; }
+    Z.ready = true; Z.error = '';
     Z.user = u ? u.email : null;
     Z.state = u ? 'connecting' : 'off';
+    Z.loaded = false; Z.denied = false;
     refresh();
     if (!u) return;
+    // Don't keep the user waiting forever if the first load is slow (e.g. offline).
+    setTimeout(() => { if (Z.user === u.email && !Z.loaded && !Z.denied) { Z.loaded = true; refresh(); } }, 8000);
     unsub = F.onSnapshot(ref, (snap) => {
-      Z.error = ''; Z.last = Date.now();
+      Z.error = ''; Z.last = Date.now(); Z.loaded = true;
       if (!snap.exists()) { pushNow(); return; }
       const localNewer = P.applyRemote(JSON.parse(snap.data().json));
       if (localNewer) schedule(); else if (!busy) Z.state = 'live';
       refresh();
-    }, (e) => { Z.state = 'error'; Z.error = friendly(e); refresh(); });
+    }, (e) => { Z.state = 'error'; Z.error = friendly(e); if (e.code === 'permission-denied') Z.denied = true; refresh(); });
   });
 
   window.addEventListener('online', () => { if (auth.currentUser) pushNow(); });

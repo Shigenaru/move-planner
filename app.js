@@ -198,7 +198,29 @@
     return { view: NAV.some((n) => n[0] === view) || view === 'note' ? view : 'home', id };
   }
 
+  function gate() {
+    const z = window.SYNC_STATUS || { configured: !!window.FIREBASE_CONFIG?.apiKey };
+    if (!z.configured) return '';
+    const card = (inner) => `<section class="gate card"><img src="icon.svg" alt="" width="56" height="56"><h1>Our Move</h1>${inner}</section>`;
+    if (!z.ready) return card(`<p class="muted">${z.error ? esc(z.error) : 'Loading…'}</p>${z.error ? '<button class="btn" data-act="reload">Try again</button>' : ''}`);
+    if (!z.user) return card(`<p>Sign in to open your shared moving plan.</p><button class="btn primary" data-act="syncIn">Sign in with Google</button>${z.error ? `<p class="small bad-text">${esc(z.error)}</p>` : ''}`);
+    if (z.denied) return card(`<p><strong>${esc(z.user)}</strong> doesn’t have access to this plan.</p><button class="btn primary" data-act="syncOut">Use a different account</button>`);
+    if (!z.loaded) return card('<p class="muted">Loading your plan…</p>');
+    return '';
+  }
+
   function render() {
+    const locked = gate();
+    document.body.classList.toggle('locked', !!locked);
+    if (locked) {
+      renderSyncBadge();
+      document.getElementById('nav').innerHTML = '';
+      document.getElementById('me').innerHTML = '';
+      document.getElementById('view').innerHTML = locked;
+      document.getElementById('modal').innerHTML = '';
+      document.body.classList.remove('modal-open');
+      return;
+    }
     const fk = document.activeElement?.dataset?.fk;
     const sel = fk && 'selectionStart' in document.activeElement ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
     const r = route();
@@ -651,7 +673,6 @@
     const st = S.settings;
     return `<h2>Welcome to your moving planner</h2>
       <p>This plan covers every step of a move in Japan, from Minato-ku to Shibuya-ku: paperwork, utilities, customs and setting up the new home. A few questions tailor it to you.</p>
-      ${window.SYNC_STATUS?.configured && !window.SYNC_STATUS.user ? `<div class="callout row gap wrap"><span class="small">Already set up on your partner’s phone? Sign in to load the shared plan.</span><button class="btn primary" data-act="syncIn">Sign in with Google</button></div>${window.SYNC_STATUS.error ? `<p class="small bad-text">${esc(window.SYNC_STATUS.error)}</p>` : ''}` : ''}
       <div class="form">
         <label><span>Your name</span><input value="${esc(st.names[0])}" data-on="name" data-field="0" data-fk="on-name0"></label>
         <label><span>Partner’s name</span><input value="${esc(st.names[1])}" data-on="name" data-field="1" data-fk="on-name1"></label>
@@ -748,7 +769,8 @@
     copy: (el) => { copyText(el.dataset.text || ''); return 'norender'; },
     export: () => { download(`move-planner-${todayISO()}.json`, JSON.stringify(S, null, 1)); return 'norender'; },
     syncIn: () => { window.SYNC?.signIn(); return 'norender'; },
-    syncOut: () => { if (!confirm('Sign out? This phone keeps its copy but stops syncing.')) return 'norender'; window.SYNC?.signOut(); return 'norender'; },
+    syncOut: () => { if ((window.SYNC_STATUS || {}).loaded && !confirm('Sign out on this device? Your plan stays saved in your account.')) return 'norender'; window.SYNC?.signOut(); return 'norender'; },
+    reload: () => { location.reload(); return 'norender'; },
     reset: () => { if (!confirm('Erase all planner data on this device? Export a backup first if unsure.')) return; S = defaultState(); },
   };
 
@@ -805,6 +827,7 @@
   window.__planner = {
     get state() { return S; },
     mergeState, sameState, render,
+    clearLocal() { localStorage.removeItem(KEY); S = defaultState(); ui.modal = { type: 'onboard' }; },
     // Merge a copy from the cloud into this device. Returns true if this device has changes the cloud lacks.
     applyRemote(remote) {
       const merged = mergeState(S, remote);
