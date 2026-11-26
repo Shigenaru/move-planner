@@ -4,15 +4,6 @@
 (function () {
   const G = (q) => 'https://www.google.com/search?q=' + encodeURIComponent(q);
 
-  const PHASES = [
-    { id: 'book', title: 'Book the big things', ja: '早めの手配', when: 'Now – early December' },
-    { id: 'setup', title: 'Set up the new home', ja: '新居の準備', when: 'Keys → moving day' },
-    { id: 'premove', title: 'Before moving day', ja: '引越し前の手続き', when: '2 weeks before the move' },
-    { id: 'moveday', title: 'Moving day', ja: '引越し当日', when: 'Moving day' },
-    { id: 'after', title: 'After the move: paperwork', ja: '引越し後の手続き', when: 'Within 14 days of moving' },
-    { id: 'moveout', title: 'Hand back the old place', ja: '旧居の退去', when: 'Before the old lease ends' },
-  ];
-
   // Questions that switch conditional steps on/off.
   const PROFILE = [
     { key: 'myna', q: 'Do you both have a My Number card (マイナンバーカード)?', def: true },
@@ -496,5 +487,5 @@
 
   const HOLIDAYS = { '2026-11-03': '文化の日', '2026-11-23': '勤労感謝の日', '2027-01-01': '元日', '2027-01-11': '成人の日', '2027-02-11': '建国記念の日', '2027-02-23': '天皇誕生日' };
 
-  window.MOVE_DATA = { PHASES, PROFILE, STEPS, NOTE_TEMPLATES, HOLIDAYS };
+  window.MOVE_DATA = { PROFILE, STEPS, NOTE_TEMPLATES, HOLIDAYS };
 })();

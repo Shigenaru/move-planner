@@ -1,14 +1,5 @@
 // Japanese text for the step library (data.js). Keyed by id; missing fields fall back to English.
 (function () {
-  const PHASES = {
-    book: { title: '早めの手配', when: '今すぐ〜12月上旬' },
-    setup: { title: '新居の準備', when: '鍵の受け取り〜引越し日' },
-    premove: { title: '引越し前の手続き', when: '引越しの2週間前から' },
-    moveday: { title: '引越し当日', when: '引越し日' },
-    after: { title: '引越し後の手続き', when: '引越しから14日以内' },
-    moveout: { title: '旧居の退去', when: '旧居の契約終了まで' },
-  };
-
   const PROFILE = {
     myna: '2人ともマイナンバーカードを持っていますか？',
     license: 'どちらかが日本の運転免許証を持っていますか？',
@@ -396,5 +387,5 @@
     },
   };
 
-  window.MOVE_DATA_JA = { PHASES, PROFILE, STEPS, NOTE_TEMPLATES };
+  window.MOVE_DATA_JA = { PROFILE, STEPS, NOTE_TEMPLATES };
 })();

@@ -243,3 +243,19 @@ body.locked .nav, body.locked .me, body.locked .sync { display: none; }
 .top .sync { margin-left: 0; }
 .brand span { white-space: nowrap; }
 @media (max-width: 480px) { .top .brand span { display: none; } .me .seg button { max-width: 88px; overflow: hidden; text-overflow: ellipsis; } }
+
+/* collapsible phases */
+.phase-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 2px 0; border: 0; background: none; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
+.phase-head .ph-title { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.phase-head .ph-title strong { font-size: 17px; }
+.phase-head .chev { width: 16px; color: var(--text-muted); }
+.phase.closed { padding-bottom: 10px; }
+.phase.closed .bar { margin-bottom: 0; }
+.add-in-phase { margin: 6px 0 8px; }
+
+/* budget split */
+td.split { min-width: 170px; }
+td.split select { width: 100%; }
+.split-in { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+.split-in input { width: 90px; }
+.split-sum { display: block; margin-top: 2px; white-space: nowrap; }

@@ -16,7 +16,6 @@
       return o;
     };
     return Object.assign({}, D_EN, {
-      PHASES: D_EN.PHASES.map((p) => Object.assign({}, p, (J.PHASES || {})[p.id], { ja: '' })),
       PROFILE: D_EN.PROFILE.map((p) => Object.assign({}, p, { q: (J.PROFILE || {})[p.key] || p.q })),
       STEPS: D_EN.STEPS.map(step),
       NOTE_TEMPLATES: Object.assign({}, D_EN.NOTE_TEMPLATES, J.NOTE_TEMPLATES || {}),
@@ -120,13 +119,34 @@
 
   // ---------- steps ----------
   let STEP_BY_ID = Object.fromEntries(D.STEPS.map((s) => [s.id, s]));
-  let PHASE_BY_ID = Object.fromEntries(D.PHASES.map((p) => [p.id, p]));
+  // Phases follow the milestones in Key dates; a step's phase comes from its due date.
+  function phases() {
+    const d = S.settings.dates;
+    const nextDay = add(d.oldEnd, 1);
+    return [
+      { id: 'p1', start: todayISO(), title: L('Now → lease start', '今 → 新居の契約開始'), when: L(`until ${fmt(add(d.keys, -1))}`, `〜${fmt(add(d.keys, -1))}`) },
+      { id: 'p2', start: d.keys, title: L('Lease start → moving day', '契約開始 → 引越し日'), when: `${fmt(d.keys)} – ${fmt(add(d.move, -1))}` },
+      { id: 'p3', start: d.move, title: L('Moving day → old lease ends', '引越し日 → 旧居の契約終了'), when: `${fmt(d.move)} – ${fmt(d.oldEnd)}` },
+      { id: 'p4', start: nextDay, title: L('After the old lease ends', '旧居の契約終了後'), when: L(`from ${fmt(nextDay)}`, `${fmt(nextDay)}〜`) },
+    ];
+  }
+  const phaseById = (id) => phases().find((p) => p.id === id);
+  function phaseOf(due) {
+    const d = S.settings.dates;
+    if (!due || due < d.keys) return 'p1';
+    if (due < d.move) return 'p2';
+    if (due <= d.oldEnd) return 'p3';
+    return 'p4';
+  }
+  const COLLAPSE_KEY = 'moveplanner.collapsed';
+  let collapsed = {};
+  try { collapsed = JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '{}'); } catch (e) { collapsed = {}; }
+  const saveCollapsed = () => localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapsed));
   function setLang(l) {
     lang = l;
     localStorage.setItem(LANG_KEY, l);
     D = localData();
     STEP_BY_ID = Object.fromEntries(D.STEPS.map((s) => [s.id, s]));
-    PHASE_BY_ID = Object.fromEntries(D.PHASES.map((p) => [p.id, p]));
   }
   const ts = (id) => S.tasks[id] || (S.tasks[id] = { updatedAt: 0 });
   const live = (arr) => arr.filter((x) => !x.deleted);
@@ -144,13 +164,13 @@
       const enabled = t.enabled ?? (s.cond ? !!S.settings.profile[s.cond] : s.def);
       const suggested = ruleDate(s.due, s.office);
       return Object.assign({}, s, {
-        enabled, done: !!t.done, assign: t.assign ?? s.assign ?? 'both', due: t.due || suggested, suggested,
+        enabled, done: !!t.done, assign: t.assign ?? s.assign ?? 'both', due: t.due || suggested, suggested, phase: phaseOf(t.due || suggested),
         noteIds: (t.noteIds || []).filter((id) => noteById(id)), memo: t.memo || '', custom: false,
         winFrom: s.win ? ruleDate(s.win.from) : '', hardDate: s.hard ? ruleDate(s.hard) : '',
       });
     });
     const custom = live(S.custom).map((c) => Object.assign({}, c, {
-      enabled: c.enabled !== false, done: !!c.done, custom: true, suggested: c.due,
+      enabled: c.enabled !== false, done: !!c.done, custom: true, suggested: c.due, phase: phaseOf(c.due),
       noteIds: (c.noteIds || []).filter((id) => noteById(id)), how: c.details ? c.details.split('\n').filter(Boolean) : [],
     }));
     return lib.concat(custom);
@@ -331,7 +351,7 @@
         ${s.ja ? `<span class="ja">${esc(s.ja)}</span>` : ''}
         <span class="meta">
           ${s.due ? `<span class="chip due ${dueClass(s)}">${fmt(s.due)}${!s.done && dueClass(s) === 'overdue' ? L(' · overdue', '・期限切れ') : ''}</span>` : ''}
-          ${opts.phase ? `<span class="chip">${esc(PHASE_BY_ID[s.phase]?.title || '')}</span>` : ''}
+          ${opts.phase ? `<span class="chip">${esc(phaseById(s.phase)?.title || '')}</span>` : ''}
           ${s.hardDate ? `<span class="chip warn">${L('Deadline', '期限')} ${fmt(s.hardDate)}</span>` : ''}
           ${notes.map((n) => { const it = noteItems(n); return `<span class="chip note">${esc(n.title)}${it.length ? ` ${it.filter((i) => i.done).length}/${it.length}` : ''}</span>`; }).join('')}
           ${s.custom ? `<span class="chip">${L('Your step', '追加したステップ')}</span>` : ''}
@@ -354,7 +374,6 @@
     const keyCards = [
       [L('Keys to the new home', '新居の鍵'), d.keys, L('New lease starts', '新居の契約開始')],
       [L('Moving day', '引越し日'), d.move, isYearEnd(d.move) ? L('Offices closed that day', 'この日は区役所休み') : ''],
-      [L('City offices closed', '区役所の休み'), '2026-12-29', L('Usually 12/29 – 1/3', '例年 12/29〜1/3')],
       [L('Old lease ends', '旧居の契約終了'), d.oldEnd, L('Move-out inspection before this', 'この日までに退去立会い')],
     ];
     const myOpen = pending.filter((s) => s.assign === me || s.assign === 'both').length;
@@ -380,7 +399,7 @@
         </section>
         <section class="card">
           <h2>${L('Progress by phase', 'フェーズ別の進み具合')}</h2>
-          ${D.PHASES.map((p) => { const ps = act.filter((s) => s.phase === p.id); const pd = ps.filter((s) => s.done).length; return `<a class="phase-row" href="#plan" data-act="jumpPhase" data-id="${p.id}"><span><strong>${esc(p.title)}</strong> <span class="muted small">${esc(p.when)}</span></span><span class="small">${pd}/${ps.length}</span>${progress(pd, ps.length)}</a>`; }).join('')}
+          ${phases().map((p) => { const ps = act.filter((s) => s.phase === p.id); const pd = ps.filter((s) => s.done).length; return `<a class="phase-row" href="#plan" data-act="jumpPhase" data-id="${p.id}"><span><strong>${esc(p.title)}</strong> <span class="muted small">${esc(p.when)}</span></span><span class="small">${pd}/${ps.length}</span>${progress(pd, ps.length)}</a>`; }).join('')}
         </section>
       </div>
       <section class="card tip">
@@ -432,7 +451,7 @@
     return `
       <div class="page-head">
         <div><h1>${L('Moving steps', '引越しのやること')}</h1><p class="muted">${L(`${act.filter((s) => s.done).length} of ${act.length} done · ${skipped} skipped. Tap a step to see what it involves.`, `${act.length}件中${act.filter((s) => s.done).length}件完了・${skipped}件スキップ。タップすると詳しい内容が見られます。`)}</p></div>
-        <div class="row gap"><button class="btn" data-act="openProfile">${L('Tailor plan', 'プランを調整')}</button><button class="btn primary" data-act="addStep">${L('+ Add step', '＋ 追加')}</button></div>
+        <div class="row gap"><button class="btn ghost" data-act="toggleAllPhases">${Object.values(collapsed).some(Boolean) ? L('Expand all', 'すべて開く') : L('Collapse all', 'すべて閉じる')}</button><button class="btn" data-act="openProfile">${L('Tailor plan', 'プランを調整')}</button><button class="btn primary" data-act="addStep">${L('+ Add step', '＋ 追加')}</button></div>
       </div>
       <div class="toolbar">
         ${seg('filter', [['all', L('All', 'すべて')], ['todo', L('To do', '未完了')], ['done', L('Done', '完了')]])}
@@ -440,14 +459,20 @@
         <input type="search" placeholder="${L('Search steps…', 'ステップを検索…')}" value="${esc(ui.q)}" data-on="search" data-fk="search">
         <label class="switch"><input type="checkbox" data-act="toggleSkipped" ${ui.showSkipped ? 'checked' : ''}> ${L('Show skipped steps', 'スキップしたものも表示')}</label>
       </div>
-      ${D.PHASES.map((p) => {
+      ${phases().map((p) => {
         const ps = list.filter((s) => s.phase === p.id).sort(sortByDue);
         const all = act.filter((s) => s.phase === p.id);
-        if (!ps.length && !all.length) return '';
-        return `<section class="phase" id="phase-${p.id}">
-          <header><div><h2>${esc(p.title)}${p.ja ? ` <span class="ja">${esc(p.ja)}</span>` : ''}</h2><span class="muted small">${esc(p.when)}</span></div><span class="small">${all.filter((s) => s.done).length}/${all.length}</span></header>
-          ${progress(all.filter((s) => s.done).length, all.length)}
-          ${ps.map((s) => stepRow(s)).join('') || `<p class="muted small empty">${L('Nothing here for this filter.', '該当するステップはありません。')}</p>`}
+        const open = !collapsed[p.id] || !!ui.q.trim();
+        const dn = all.filter((s) => s.done).length;
+        return `<section class="phase ${open ? '' : 'closed'}" id="phase-${p.id}">
+          <button class="phase-head" data-act="togglePhase" data-id="${p.id}" aria-expanded="${open}">
+            <span class="chev" aria-hidden="true">${open ? '▾' : '▸'}</span>
+            <span class="ph-title"><strong>${esc(p.title)}</strong><span class="muted small">${esc(p.when)}</span></span>
+            <span class="small">${dn}/${all.length}</span>
+          </button>
+          ${progress(dn, all.length)}
+          ${open ? `${ps.map((s) => stepRow(s)).join('') || `<p class="muted small empty">${L('Nothing here for this filter.', '該当するステップはありません。')}</p>`}
+          <button class="btn ghost small add-in-phase" data-act="addStep" data-id="${p.start}">${L('+ Add a step here', '＋ ここにステップを追加')}</button>` : ''}
         </section>`;
       }).join('')}`;
   }
@@ -562,9 +587,9 @@
     const est = ex.reduce((a, e) => a + (Number(e.est) || 0), 0) + shopPlanned;
     const actual = ex.reduce((a, e) => a + (Number(e.actual) || 0), 0);
     const paid = { a: 0, b: 0 };
-    ex.filter((e) => e.shared && Number(e.actual)).forEach((e) => (paid[e.paidBy] += Number(e.actual)));
-    const half = (paid.a + paid.b) / 2;
-    const owe = paid.a - half;
+    let shareOfA = 0;
+    ex.forEach((e) => { const amt = Number(e.actual) || 0; if (!amt) return; paid[e.paidBy] += amt; shareOfA += splitA(e, amt); });
+    const owe = paid.a - shareOfA; // > 0: name 2 owes name 1
     const cats = {};
     ex.forEach((e) => (cats[e.cat || 'Other'] = (cats[e.cat || 'Other'] || 0) + (Number(e.actual) || Number(e.est) || 0)));
     const catNames = ['Housing', 'Moving', 'Furniture', 'Utilities', 'Other'];
@@ -574,23 +599,45 @@
         <div class="card kd"><span class="muted small">${L('Estimated total', '見積もり合計')}</span><strong>${yen(est)}</strong><span class="muted small">${L('includes shopping lists', '買い物リストを含む')}</span></div>
         <div class="card kd"><span class="muted small">${L('Spent so far', 'これまでの支出')}</span><strong>${yen(actual)}</strong></div>
         <div class="card kd"><span class="muted small">${L('Shopping lists', '買い物リスト')}</span><strong>${yen(shopBought)}</strong><span class="muted small">${L(`bought of ${yen(shopPlanned)}`, `購入済み（予定 ${yen(shopPlanned)}）`)}</span></div>
-        <div class="card kd accent"><span class="muted small">${L('Settle up (shared costs, 50/50)', '精算（共通費用を折半）')}</span><strong>${Math.abs(owe) < 1 ? L('All even', '精算なし') : L(`${esc(owe > 0 ? names()[1] : names()[0])} owes ${yen(Math.abs(owe))}`, `${esc(owe > 0 ? names()[1] : names()[0])}が ${yen(Math.abs(owe))} 払う`)}</strong><span class="muted small">${L(`${esc(names()[0])} paid ${yen(paid.a)} · ${esc(names()[1])} paid ${yen(paid.b)}`, `${esc(names()[0])} ${yen(paid.a)} 支払い · ${esc(names()[1])} ${yen(paid.b)} 支払い`)}</span></div>
+        <div class="card kd accent"><span class="muted small">${L('Settle up', '精算')}</span><strong>${Math.abs(owe) < 1 ? L('All even', '精算なし') : L(`${esc(owe > 0 ? names()[1] : names()[0])} owes ${yen(Math.abs(owe))}`, `${esc(owe > 0 ? names()[1] : names()[0])}が ${yen(Math.abs(owe))} 払う`)}</strong><span class="muted small">${L(`${esc(names()[0])} paid ${yen(paid.a)} · ${esc(names()[1])} paid ${yen(paid.b)}`, `${esc(names()[0])} ${yen(paid.a)} 支払い · ${esc(names()[1])} ${yen(paid.b)} 支払い`)}</span></div>
       </section>
       <section class="card">
         <div class="table-wrap"><table class="exp">
-          <thead><tr><th>${L('Item', '項目')}</th><th>${L('Category', 'カテゴリ')}</th><th class="num">${L('Estimate', '見積もり')}</th><th class="num">${L('Actual', '実費')}</th><th>${L('Paid by', '支払った人')}</th><th>${L('Shared', '折半')}</th><th></th></tr></thead>
+          <thead><tr><th>${L('Item', '項目')}</th><th>${L('Category', 'カテゴリ')}</th><th class="num">${L('Estimate', '見積もり')}</th><th class="num">${L('Actual', '実費')}</th><th>${L('Paid by', '支払った人')}</th><th>${L('Split', '負担割合')}</th><th></th></tr></thead>
           <tbody>${ex.map((e) => `<tr>
             <td><input value="${esc(tr(e.label))}" data-on="exp" data-field="label" data-id="${e.id}" data-fk="ex-${e.id}-label" placeholder="${L('What', '内容')}"></td>
             <td><select data-on="exp" data-field="cat" data-id="${e.id}">${catNames.map((c) => `<option value="${c}" ${e.cat === c ? 'selected' : ''}>${catLabel(c)}</option>`).join('')}</select></td>
             <td class="num"><input type="number" inputmode="numeric" value="${esc(e.est)}" data-on="exp" data-field="est" data-id="${e.id}" data-fk="ex-${e.id}-est" placeholder="¥"></td>
             <td class="num"><input type="number" inputmode="numeric" value="${esc(e.actual)}" data-on="exp" data-field="actual" data-id="${e.id}" data-fk="ex-${e.id}-actual" placeholder="¥"></td>
             <td><select data-on="exp" data-field="paidBy" data-id="${e.id}"><option value="a" ${e.paidBy === 'a' ? 'selected' : ''}>${esc(names()[0])}</option><option value="b" ${e.paidBy === 'b' ? 'selected' : ''}>${esc(names()[1])}</option></select></td>
-            <td><input type="checkbox" data-act="expShared" data-id="${e.id}" ${e.shared ? 'checked' : ''} aria-label="${L('Shared 50/50', '折半')}"></td>
+            <td class="split">${splitCell(e)}</td>
             <td><button class="icon-btn" data-act="delExpense" data-id="${e.id}" aria-label="${L('Delete', '削除')}">×</button></td>
           </tr>`).join('')}</tbody>
         </table></div>
         <p class="small muted">${L('By category:', 'カテゴリ別：')} ${Object.entries(cats).map(([c, v]) => `${esc(catLabel(c))} ${yen(v)}`).join(' · ')}</p>
       </section>`;
+  }
+
+  // How much of an expense is name 1's share. Modes: even (50/50), pct (name 1's %), amt (name 1's yen), payer (payer pays all).
+  const splitMode = (e) => e.split || (e.shared === false ? 'payer' : 'even');
+  const blank = (v) => v === '' || v == null;
+  function splitA(e, amt) {
+    const m = splitMode(e), v = Number(e.splitA);
+    if (m === 'pct') return amt * (blank(e.splitA) ? 50 : Math.min(100, Math.max(0, v))) / 100;
+    if (m === 'amt') return blank(e.splitA) ? amt / 2 : Math.min(amt, Math.max(0, v));
+    if (m === 'payer') return e.paidBy === 'a' ? amt : 0;
+    return amt / 2;
+  }
+  function splitCell(e) {
+    const m = splitMode(e);
+    const amt = Number(e.actual) || Number(e.est) || 0;
+    const a = splitA(e, amt);
+    const modes = [['even', L('50/50', '折半')], ['pct', L('Custom %', '割合を指定')], ['amt', L('Fixed amount', '金額を指定')], ['payer', L('Payer pays all', '支払った人が全額')]];
+    const input = m === 'pct' || m === 'amt'
+      ? `<label class="split-in"><span class="small">${esc(names()[0])}</span><input type="number" min="0" ${m === 'pct' ? 'max="100"' : ''} inputmode="numeric" value="${esc(e.splitA ?? '')}" placeholder="${m === 'pct' ? '50' : '¥'}" data-on="exp" data-field="splitA" data-id="${e.id}" data-fk="ex-${e.id}-splitA"><span class="small">${m === 'pct' ? '%' : ''}</span></label>`
+      : '';
+    return `<select data-on="exp" data-field="split" data-id="${e.id}" aria-label="${L('Split', '負担割合')}">${modes.map(([v, l]) => `<option value="${v}" ${m === v ? 'selected' : ''}>${l}</option>`).join('')}</select>${input}
+      ${amt ? `<span class="small muted split-sum">${esc(names()[0])} ${yen(a)} · ${esc(names()[1])} ${yen(amt - a)}</span>` : ''}`;
   }
 
   // ----- Contacts / info -----
@@ -690,7 +737,7 @@
     const list = (arr) => `<ul>${arr.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`;
     return `
       <header class="sheet-head">
-        <div><span class="eyebrow">${esc(PHASE_BY_ID[s.phase]?.title || '')}</span>
+        <div><span class="eyebrow">${esc(phaseById(s.phase)?.title || '')}</span>
         ${s.custom ? `<input class="title-input" value="${esc(s.title)}" data-on="customField" data-field="title" data-id="${s.id}" data-fk="cs-title">` : `<h2>${esc(s.title)}</h2>`}
         ${s.ja ? `<p class="ja big">${esc(s.ja)}</p>` : ''}</div>
         <button class="icon-btn" data-act="close" aria-label="${L('Close', '閉じる')}">×</button>
@@ -792,13 +839,16 @@
     skip: (el) => setStepField(el.dataset.id, 'enabled', false),
     setUi: (el) => { ui[el.dataset.key] = el.dataset.id; },
     toggleSkipped: (el) => { ui.showSkipped = el.checked; },
-    jumpPhase: (el, e) => { e.preventDefault(); ui.filter = 'all'; location.hash = '#plan'; setTimeout(() => document.getElementById('phase-' + el.dataset.id)?.scrollIntoView({ behavior: 'smooth' }), 50); },
+    togglePhase: (el) => { collapsed[el.dataset.id] = !collapsed[el.dataset.id]; saveCollapsed(); },
+    toggleAllPhases: () => { const any = Object.values(collapsed).some(Boolean); collapsed = {}; if (!any) phases().forEach((p) => (collapsed[p.id] = true)); saveCollapsed(); },
+    jumpPhase: (el, e) => { e.preventDefault(); ui.filter = 'all'; delete collapsed[el.dataset.id]; saveCollapsed(); location.hash = '#plan'; setTimeout(() => document.getElementById('phase-' + el.dataset.id)?.scrollIntoView({ behavior: 'smooth' }), 50); },
     calDay: (el) => { ui.calDay = ui.calDay === el.dataset.id ? null : el.dataset.id; },
     openProfile: () => { ui.modal = { type: 'profile' }; },
     profile: (el) => { S.settings.profile[el.dataset.id] = el.checked; touchSettings(); },
     finishOnboard: () => { S.settings.onboarded = true; touchSettings(); ui.modal = null; },
     addStep: (el) => {
-      const c = touch({ id: 'c-' + uid(), phase: el.dataset.id ? (el.dataset.id <= S.settings.dates.move ? 'setup' : 'after') : 'setup', title: 'New step', ja: '', due: el.dataset.id || S.settings.dates.move, assign: 'both', details: '', noteIds: [] });
+      const due = el.dataset.id && el.dataset.id > todayISO() ? el.dataset.id : el.dataset.id ? todayISO() : S.settings.dates.move;
+      const c = touch({ id: 'c-' + uid(), title: L('New step', '新しいステップ'), ja: '', due, assign: 'both', details: '', noteIds: [] });
       S.custom.push(c);
       ui.modal = { type: 'step', id: c.id };
     },
@@ -813,8 +863,7 @@
     delItem: (el) => { const n = noteById(el.dataset.id); touch(n.items.find((i) => i.id === el.dataset.item)).deleted = true; touch(n); },
     clearDone: (el) => { const n = noteById(el.dataset.id); noteItems(n).filter((i) => i.done).forEach((i) => (touch(i).deleted = true)); touch(n); },
     shareNote: (el) => { const t = noteAsText(noteById(el.dataset.id)); if (navigator.share) navigator.share({ text: t }).catch(() => {}); else copyText(t); },
-    addExpense: () => { S.expenses.push(touch({ id: uid(), label: '', cat: 'Other', est: '', actual: '', paidBy: me, shared: true })); },
-    expShared: (el) => { touch(S.expenses.find((x) => x.id === el.dataset.id)).shared = el.checked; },
+    addExpense: () => { S.expenses.push(touch({ id: uid(), label: '', cat: 'Other', est: '', actual: '', paidBy: me, split: 'even', splitA: '' })); },
     delExpense: (el) => { touch(S.expenses.find((x) => x.id === el.dataset.id)).deleted = true; },
     addContact: () => { S.contacts.push(touch({ id: uid(), role: '', name: '', phone: '', url: '', ref: '', notes: '' })); },
     delContact: (el) => { if (!confirm(L('Delete this contact?', 'この連絡先を削除しますか？'))) return; touch(S.contacts.find((x) => x.id === el.dataset.id)).deleted = true; },
@@ -833,7 +882,12 @@
     item: (el, ev) => { const n = noteById(el.dataset.id); const i = n.items.find((x) => x.id === el.dataset.item); i[el.dataset.field] = el.value; touch(i); touch(n); return ev.type === 'change'; },
     noteField: (el) => { const n = noteById(el.dataset.id); n[el.dataset.field] = el.value; touch(n); return false; },
     newFromTpl: (el) => { if (!el.value) return false; const n = newNote(el.value); location.hash = '#note/' + n.id; return true; },
-    exp: (el, ev) => { touch(S.expenses.find((x) => x.id === el.dataset.id))[el.dataset.field] = el.value; return ev.type === 'change'; },
+    exp: (el, ev) => {
+      const e = touch(S.expenses.find((x) => x.id === el.dataset.id));
+      if (el.dataset.field === 'split' && e.split !== el.value) e.splitA = '';
+      e[el.dataset.field] = el.value;
+      return ev.type === 'change';
+    },
     contact: (el, ev) => { touch(S.contacts.find((x) => x.id === el.dataset.id))[el.dataset.field] = el.value; return ev.type === 'change' && ['phone', 'url'].includes(el.dataset.field); },
     addr: (el) => { S.settings.addresses = S.settings.addresses || {}; S.settings.addresses[el.dataset.field] = el.value; touchSettings(); return false; },
     name: (el, ev) => { S.settings.names[Number(el.dataset.field)] = el.value; touchSettings(); return ev.type === 'change'; },
