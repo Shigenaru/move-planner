@@ -651,6 +651,7 @@
     const st = S.settings;
     return `<h2>Welcome to your moving planner</h2>
       <p>This plan covers every step of a move in Japan, from Minato-ku to Shibuya-ku: paperwork, utilities, customs and setting up the new home. A few questions tailor it to you.</p>
+      ${window.SYNC_STATUS?.configured && !window.SYNC_STATUS.user ? `<div class="callout row gap wrap"><span class="small">Already set up on your partner’s phone? Sign in to load the shared plan.</span><button class="btn primary" data-act="syncIn">Sign in with Google</button></div>${window.SYNC_STATUS.error ? `<p class="small bad-text">${esc(window.SYNC_STATUS.error)}</p>` : ''}` : ''}
       <div class="form">
         <label><span>Your name</span><input value="${esc(st.names[0])}" data-on="name" data-field="0" data-fk="on-name0"></label>
         <label><span>Partner’s name</span><input value="${esc(st.names[1])}" data-on="name" data-field="1" data-fk="on-name1"></label>
