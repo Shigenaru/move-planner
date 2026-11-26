@@ -74,17 +74,29 @@
       where: 'Internet provider (NTT/au/NURO/ソフトバンク光 etc.)',
     },
     {
-      id: 'new-lease', phase: 'book', title: 'Finish the new lease and get the keys', ja: '新居の契約・初期費用・鍵の受け取り',
+      id: 'new-lease', phase: 'book', title: 'Sign the new lease and pay the move-in costs', ja: '新居の契約・初期費用の支払い',
       def: true, due: { a: 'keys', o: -3 }, assign: 'both',
       why: 'The keys are handed over only after the contract is signed and the move-in costs (初期費用) are paid.',
       how: [
         'Sign the lease (賃貸借契約書) and the guarantor-company contract (保証会社) if there is one.',
         'Pay the move-in costs: 敷金 (deposit), 礼金 (key money), 仲介手数料 (agent fee), 前家賃 (first rent), 保証料, and the 鍵交換費 (lock change fee).',
         'Join the required fire insurance (火災保険). It is often arranged by the agent, but you can choose your own.',
-        'Pick up the keys on the start date and confirm how many keys you got.',
+        'Agree on when and where you will pick up the keys.',
       ],
       bring: ['Residence certificate (住民票) if requested', 'ID', 'Seal (印鑑)', 'Bank card'],
       where: 'Real estate agent (不動産会社)',
+    },
+    {
+      id: 'keys', phase: 'book', title: 'Pick up the keys', ja: '鍵の受け取り',
+      def: true, due: { a: 'keys', o: 0 }, assign: 'both',
+      why: 'The new lease starts today. Once you have the keys, you can start setting up the new home.',
+      how: [
+        'Pick up the keys at the agent or management company (the time is usually set when you sign).',
+        'Count the keys and write down how many you received. You must return all of them when you move out.',
+        'Ask about the key for the mailbox, the auto-lock and the bike parking, and where the breaker and the water valve are.',
+      ],
+      bring: ['ID', 'Contract copy'],
+      where: 'Real estate agent or management company',
     },
     {
       id: 'budget', phase: 'book', title: 'Set a moving budget', ja: '予算を決める',
