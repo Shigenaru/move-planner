@@ -1,6 +1,5 @@
 (function () {
   const D = window.MOVE_DATA;
-  const ROKUYO = window.ROKUYO || {};
   const KEY = 'moveplanner.v1';
   const ME_KEY = 'moveplanner.me';
   const SESSION_URL = 'https://app.devin.ai/sessions/df5ab0c16eb64067b12c25abbc4fa94e';
@@ -302,7 +301,7 @@
     const moveIn = diff(t, d.move);
     const keyCards = [
       ['Keys to the new home', d.keys, 'New lease starts'],
-      ['Moving day', d.move, ROKUYO[d.move] ? `${ROKUYO[d.move]} · ${D.ROKUYO_INFO[ROKUYO[d.move]]}` : ''],
+      ['Moving day', d.move, isYearEnd(d.move) ? 'Offices closed that day' : ''],
       ['City offices closed', '2026-12-29', 'Usually 12/29 – 1/3'],
       ['Old lease ends', d.oldEnd, 'Move-out inspection before this'],
     ];
@@ -316,6 +315,7 @@
           ${progress(done, act.length)}
         </div>
       </section>
+      ${moveDayPicker()}
       <section class="keydates">
         ${keyCards.map(([l, date, sub]) => `<div class="card kd ${date === d.move ? 'accent' : ''}"><span class="muted small">${l}</span><strong>${fmt(date)}</strong><span class="small">${relDays(date)}</span>${sub ? `<span class="muted small">${esc(sub)}</span>` : ''}</div>`).join('')}
       </section>
@@ -331,7 +331,6 @@
           ${D.PHASES.map((p) => { const ps = act.filter((s) => s.phase === p.id); const pd = ps.filter((s) => s.done).length; return `<a class="phase-row" href="#plan" data-act="jumpPhase" data-id="${p.id}"><span><strong>${esc(p.title)}</strong> <span class="muted small">${esc(p.when)}</span></span><span class="small">${pd}/${ps.length}</span>${progress(pd, ps.length)}</a>`; }).join('')}
         </section>
       </div>
-      ${moveDayPicker()}
       <section class="card tip">
         <h2>Year-end checklist</h2>
         <ul>
@@ -344,23 +343,17 @@
 
   function moveDayPicker() {
     const d = S.settings.dates;
-    const days = [];
-    for (let i = 0; i < 8; i++) days.push(add('2026-12-24', i));
-    return `<section class="card">
-      <h2>Pick the moving day</h2>
-      <p class="muted small">六曜 (rokuyo) are traditional lucky/unlucky days that many people in Japan still check when moving. Changing the moving day moves every step's suggested date.</p>
-      <div class="days">
-        ${days.map((x) => {
-          const r = ROKUYO[x];
-          const notes = [];
-          if (isYearEnd(x)) notes.push('Offices closed');
-          if (D.HOLIDAYS[x]) notes.push(D.HOLIDAYS[x]);
-          if (x === '2026-12-31') notes.push('New Year’s Eve');
-          return `<button class="day ${x === d.move ? 'on' : ''}" data-act="setMove" data-id="${x}">
-            <strong>${fmt(x)}</strong><span class="rk rk-${r}">${r || ''}</span><span class="small muted">${esc(D.ROKUYO_INFO[r] || '')}</span>${notes.map((n) => `<span class="small warn-text">${esc(n)}</span>`).join('')}
-          </button>`;
-        }).join('')}
-      </div>
+    const field = (k, l) => `<label><span>${l}</span><input type="date" value="${d[k]}" data-on="date" data-field="${k}"></label>`;
+    const warn = [];
+    if (d.move < d.keys) warn.push('Moving day is before you get the keys.');
+    if (d.move > d.oldEnd) warn.push('Moving day is after the old lease ends.');
+    if (isYearEnd(d.move)) warn.push('City offices are closed on this day (12/29 – 1/3).');
+    const overlap = diff(d.keys, d.oldEnd);
+    return `<section class="card form">
+      <h2>Key dates</h2>
+      <div class="datefields">${field('move', 'Moving day')}${field('keys', 'New lease starts')}${field('oldEnd', 'Old lease ends')}</div>
+      ${warn.map((w) => `<p class="small warn-text">${esc(w)}</p>`).join('')}
+      <p class="muted small">${overlap > 0 ? `You have both homes for ${overlap} days. ` : ''}Change a date and every step's suggested date moves with it. Dates you set by hand on a step stay as they are.</p>
     </section>`;
   }
 
@@ -427,7 +420,7 @@
         const items = (byDay[x] || []).sort((a, b) => a.done - b.done);
         const cls = [isYearEnd(x) ? 'closed' : '', x === t ? 'today' : '', x === sel ? 'sel' : '', keyLabel[x] ? 'key' : '', x > d.keys && x < d.oldEnd && x <= d.oldEnd ? 'overlap' : '', D.HOLIDAYS[x] || toD(x).getUTCDay() === 0 ? 'hol' : ''].join(' ');
         cells += `<button class="cell ${cls}" data-act="calDay" data-id="${x}">
-          <span class="dn">${day}${ROKUYO[x] ? `<em class="rk rk-${ROKUYO[x]}">${ROKUYO[x]}</em>` : ''}</span>
+          <span class="dn">${day}</span>
           ${keyLabel[x] ? `<span class="kl">${keyLabel[x]}</span>` : ''}
           ${D.HOLIDAYS[x] ? `<span class="hl">${esc(D.HOLIDAYS[x])}</span>` : ''}
           ${items.slice(0, 3).map((s) => `<span class="ev ${s.done ? 'done' : ''}">${esc(s.title)}</span>`).join('')}
@@ -440,8 +433,8 @@
     const selList = sel ? (byDay[sel] || []) : [];
     return `
       <div class="page-head"><div><h1>Calendar</h1><p class="muted">Tap a day to see its steps or add an appointment.</p></div></div>
-      <div class="legend small"><span><i class="lg key"></i>Key date</span><span><i class="lg overlap"></i>Overlap (both homes)</span><span><i class="lg closed"></i>Offices closed</span><span><em class="rk rk-大安">大安</em> 六曜</span></div>
-      ${sel ? `<section class="card dayview"><header class="row between"><h2>${fmt(sel)} ${ROKUYO[sel] ? `<span class="rk rk-${ROKUYO[sel]}">${ROKUYO[sel]}</span>` : ''}</h2><button class="btn small primary" data-act="addStep" data-id="${sel}">+ Add on this day</button></header>
+      <div class="legend small"><span><i class="lg key"></i>Key date</span><span><i class="lg overlap"></i>Overlap (both homes)</span><span><i class="lg closed"></i>Offices closed</span></div>
+      ${sel ? `<section class="card dayview"><header class="row between"><h2>${fmt(sel)}</h2><button class="btn small primary" data-act="addStep" data-id="${sel}">+ Add on this day</button></header>
         ${isYearEnd(sel) ? '<p class="small warn-text">Ward offices are usually closed on this day.</p>' : ''}
         ${selList.map((s) => stepRow(s, { phase: true })).join('') || '<p class="muted small">No steps on this day.</p>'}</section>` : ''}
       <div class="months">${cal}</div>`;
@@ -740,7 +733,6 @@
     setUi: (el) => { ui[el.dataset.key] = el.dataset.id; },
     toggleSkipped: (el) => { ui.showSkipped = el.checked; },
     jumpPhase: (el, e) => { e.preventDefault(); ui.filter = 'all'; location.hash = '#plan'; setTimeout(() => document.getElementById('phase-' + el.dataset.id)?.scrollIntoView({ behavior: 'smooth' }), 50); },
-    setMove: (el) => { S.settings.dates.move = el.dataset.id; touchSettings(); },
     calDay: (el) => { ui.calDay = ui.calDay === el.dataset.id ? null : el.dataset.id; },
     openProfile: () => { ui.modal = { type: 'profile' }; },
     profile: (el) => { S.settings.profile[el.dataset.id] = el.checked; touchSettings(); },

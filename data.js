@@ -496,14 +496,5 @@
 
   const HOLIDAYS = { '2026-11-03': '文化の日', '2026-11-23': '勤労感謝の日', '2027-01-01': '元日', '2027-01-11': '成人の日', '2027-02-11': '建国記念の日', '2027-02-23': '天皇誕生日' };
 
-  const ROKUYO_INFO = {
-    '大安': 'Most lucky day; popular (and pricier) for moving',
-    '友引': 'Good for moving; avoided for funerals',
-    '先勝': 'Lucky in the morning',
-    '先負': 'Lucky in the afternoon',
-    '赤口': 'Unlucky, except around noon',
-    '仏滅': 'Least lucky; movers are sometimes cheaper',
-  };
-
-  window.MOVE_DATA = { PHASES, PROFILE, STEPS, NOTE_TEMPLATES, HOLIDAYS, ROKUYO_INFO };
+  window.MOVE_DATA = { PHASES, PROFILE, STEPS, NOTE_TEMPLATES, HOLIDAYS };
 })();
