@@ -300,7 +300,7 @@
     renderSyncBadge();
     document.getElementById('me').innerHTML = ['a', 'b'].map((k) => `<button class="${me === k ? 'on' : ''}" data-act="me" data-id="${k}" title="${esc(L('I am ' + nameOf(k), nameOf(k) + 'として使う'))}">${esc(nameOf(k))}</button>`).join('');
     const v = { home: vHome, plan: vPlan, calendar: vCalendar, notes: vNotes, note: vNote, budget: vBudget, contacts: vContacts, settings: vSettings }[r.view];
-    document.getElementById('view').innerHTML = v(r.id);
+    document.getElementById('view').innerHTML = (ui.update ? `<div class="callout row between gap"><span class="small">${L('A new version is available.', '新しいバージョンがあります。')}</span><button class="btn small primary" data-act="update">${L('Update', '更新')}</button></div>` : '') + v(r.id);
     document.getElementById('modal').innerHTML = renderModal();
     document.body.classList.toggle('modal-open', !!ui.modal);
     if (fk) {
@@ -872,6 +872,7 @@
     syncIn: () => { window.SYNC?.signIn(); return 'norender'; },
     syncOut: () => { if ((window.SYNC_STATUS || {}).loaded && !confirm(L('Sign out on this device? Your plan stays saved in your account.', 'この端末でログアウトしますか？プランはアカウントに保存されたままです。'))) return 'norender'; window.SYNC?.signOut(); return 'norender'; },
     reload: () => { location.reload(); return 'norender'; },
+    update: () => { location.replace(location.pathname + '?v=' + ui.update + location.hash); return 'norender'; },
     lang: (el) => { setLang(el.dataset.id || (lang === 'ja' ? 'en' : 'ja')); },
     reset: () => { if (!confirm(L('Erase all planner data on this device? Export a backup first if unsure.', 'この端末のデータをすべて消去しますか？不安ならバックアップを書き出してから行いましょう。'))) return; S = defaultState(); },
   };
@@ -928,6 +929,22 @@
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ui.modal) { ui.modal = null; render(); } });
   window.addEventListener('hashchange', () => { window.scrollTo(0, 0); render(); });
   window.addEventListener('storage', (e) => { if (e.key === KEY) { S = load(); render(); } });
+
+  // Check for a newer deployed version; reload with a fresh URL so cached files are skipped.
+  const APP_VERSION = document.querySelector('meta[name="app-version"]')?.content || '';
+  async function checkUpdate() {
+    try {
+      const v = (await (await fetch('version.txt?t=' + Date.now(), { cache: 'no-store' })).text()).trim();
+      if (v && APP_VERSION && v !== APP_VERSION && /^\d+$/.test(v)) {
+        if (new URLSearchParams(location.search).get('v') === v) return; // already tried; avoid a reload loop
+        if (ui.modal || document.activeElement?.matches?.('input, textarea')) { ui.update = v; render(); return; }
+        location.replace(location.pathname + '?v=' + v + location.hash);
+      }
+    } catch (e) { /* offline */ }
+  }
+  checkUpdate();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
+  setInterval(checkUpdate, 5 * 60 * 1000);
 
   if (!S.settings.onboarded) ui.modal = { type: 'onboard' };
   render();

@@ -23,6 +23,8 @@ python3 -m http.server 8080
 
 Live at https://shigenaru.github.io/move-planner/ (GitHub Pages, `main` branch).
 
+After changing any file, run `./bump-version.sh` before committing. GitHub Pages lets browsers cache files for 10 minutes; the new version number makes open apps reload the fresh files.
+
 Data is kept in the browser's `localStorage` and, when signed in, in one Firestore document (`plans/shared`). Access is limited by Firestore security rules to the couple's Google accounts. The Firebase web config in `firebase-config.js` is public by design.
 
 ## Files
