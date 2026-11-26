@@ -347,7 +347,7 @@
     const warn = [];
     if (d.move < d.keys) warn.push('Moving day is before you get the keys.');
     if (d.move > d.oldEnd) warn.push('Moving day is after the old lease ends.');
-    if (isYearEnd(d.move)) warn.push('City offices are closed on this day (12/29 – 1/3).');
+    if (isYearEnd(d.move)) warn.push('City offices are closed that day (12/29 – 1/3). That is fine for moving, and the paperwork steps are scheduled around it.');
     const overlap = diff(d.keys, d.oldEnd);
     return `<section class="card form">
       <h2>Key dates</h2>
