@@ -359,6 +359,7 @@
       <button class="step-main" data-act="openStep" data-id="${s.id}">
         <span class="step-title">${esc(s.title)}</span>
         ${s.ja ? `<span class="ja">${esc(s.ja)}</span>` : ''}
+        ${s.memo && s.memo.trim() ? `<span class="memo-line" title="${esc(s.memo)}"><span aria-hidden="true">✎</span> ${esc(s.memo.trim().split('\n')[0])}</span>` : ''}
         <span class="meta">
           ${s.due ? `<span class="chip due ${dueClass(s)}">${s.from ? `${fmt(s.from)} → ` : ''}${fmt(s.due)}${!s.done && dueClass(s) === 'overdue' ? L(' · overdue', '・期限切れ') : ''}</span>` : ''}
           ${opts.phase ? `<span class="chip">${esc(phaseById(s.phase)?.title || '')}</span>` : ''}
