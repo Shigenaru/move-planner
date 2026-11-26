@@ -76,6 +76,7 @@
     localStorage.setItem(KEY, JSON.stringify(S));
     const el = document.getElementById('saved');
     if (el) { el.textContent = 'Saved'; el.classList.add('show'); clearTimeout(saveTimer); saveTimer = setTimeout(() => el.classList.remove('show'), 1200); }
+    window.SYNC?.push();
   }
   const touch = (o) => { o.updatedAt = now(); return o; };
   const touchSettings = () => touch(S.settings);
@@ -167,6 +168,17 @@
     return out;
   }
 
+  // Order-independent form of the state, used to tell whether two copies really differ.
+  function canon(x) {
+    if (Array.isArray(x)) {
+      const arr = x.map(canon);
+      return x.every((r) => r && r.id) ? arr.sort((p, q) => (p.id < q.id ? -1 : 1)) : arr;
+    }
+    if (x && typeof x === 'object') { const o = {}; Object.keys(x).sort().forEach((k) => (o[k] = canon(x[k]))); return o; }
+    return x;
+  }
+  const sameState = (a, b) => JSON.stringify(canon(a)) === JSON.stringify(canon(b));
+
   // ---------- rendering ----------
   const ICON = {
     home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
@@ -192,6 +204,7 @@
     const r = route();
     const navView = r.view === 'note' ? 'notes' : r.view;
     document.getElementById('nav').innerHTML = NAV.map(([k, l]) => `<a href="#${k}" class="${navView === k ? 'on' : ''}">${icon(k)}<span>${l}</span></a>`).join('');
+    renderSyncBadge();
     document.getElementById('me').innerHTML = ['a', 'b'].map((k) => `<button class="${me === k ? 'on' : ''}" data-act="me" data-id="${k}" title="I am ${esc(nameOf(k))}">${esc(nameOf(k))}</button>`).join('');
     const v = { home: vHome, plan: vPlan, calendar: vCalendar, notes: vNotes, note: vNote, budget: vBudget, contacts: vContacts, settings: vSettings }[r.view];
     document.getElementById('view').innerHTML = v(r.id);
@@ -201,6 +214,37 @@
       const el = document.querySelector(`[data-fk="${CSS.escape(fk)}"]`);
       if (el) { el.focus(); if (sel && el.setSelectionRange) try { el.setSelectionRange(sel[0], sel[1]); } catch (e) { /* ignore */ } }
     }
+  }
+
+  function syncInfo() {
+    const z = window.SYNC_STATUS || {};
+    if (!z.configured) return { cls: 'off', label: 'This device only' };
+    if (!z.user) return { cls: 'off', label: 'Not signed in' };
+    if (z.state === 'error') return { cls: 'bad', label: 'Sync problem' };
+    if (z.state === 'offline') return { cls: 'warn', label: 'Offline – will sync later' };
+    if (z.state === 'saving' || z.state === 'connecting') return { cls: 'warn', label: 'Syncing…' };
+    return { cls: 'ok', label: 'Synced' };
+  }
+  function renderSyncBadge() {
+    const el = document.getElementById('sync');
+    if (!el) return;
+    const z = window.SYNC_STATUS || {};
+    const i = syncInfo();
+    el.hidden = !z.configured;
+    el.className = 'sync ' + i.cls;
+    el.title = i.label;
+    el.innerHTML = `<i></i><span>${esc(i.label)}</span>`;
+  }
+  function syncCard() {
+    const z = window.SYNC_STATUS || {};
+    if (!z.configured) return `<p class="small muted">Live sync is not set up yet, so data is saved in this browser only.</p>`;
+    const i = syncInfo();
+    if (!z.user) return `<p class="small">Sign in with Google so both of your phones show the same plan, updated live.</p>
+      <div class="row gap wrap"><button class="btn primary" data-act="syncIn">Sign in with Google</button></div>
+      ${z.error ? `<p class="small bad-text">${esc(z.error)}</p>` : ''}`;
+    return `<p class="small"><span class="sync inline ${i.cls}"><i></i><span>${esc(i.label)}</span></span> Signed in as <strong>${esc(z.user)}</strong>${z.last ? ` · last synced ${new Date(z.last).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}</p>
+      ${z.error ? `<p class="small bad-text">${esc(z.error)}</p>` : ''}
+      <div class="row gap wrap"><button class="btn ghost" data-act="syncOut">Sign out</button></div>`;
   }
 
   const progress = (done, total) => `<div class="bar" role="progressbar" aria-valuenow="${done}" aria-valuemax="${total}"><i style="width:${total ? Math.round((done / total) * 100) : 0}%"></i></div>`;
@@ -526,8 +570,12 @@
         ${profileForm()}
       </section>
       <section class="card form">
-        <h2>Sync &amp; backup</h2>
-        <p class="small">Data is saved in this browser. To share with your partner: <strong>Export</strong> → send the file (LINE, AirDrop, email) → on the other phone, <strong>Import &amp; merge</strong>. For each item, the most recent change wins, so you can both edit and merge back and forth.</p>
+        <h2>Live sync</h2>
+        ${syncCard()}
+      </section>
+      <section class="card form">
+        <h2>Backup</h2>
+        <p class="small">Save a copy of everything as a file, or merge in a file from the other phone. For each item, the most recent change wins.</p>
         <div class="row gap wrap">
           <button class="btn primary" data-act="export">Export / share backup</button>
           <label class="btn">Import &amp; merge<input type="file" accept="application/json,.json" data-on="import" hidden></label>
@@ -698,6 +746,8 @@
     delContact: (el) => { if (!confirm('Delete this contact?')) return; touch(S.contacts.find((x) => x.id === el.dataset.id)).deleted = true; },
     copy: (el) => { copyText(el.dataset.text || ''); return 'norender'; },
     export: () => { download(`move-planner-${todayISO()}.json`, JSON.stringify(S, null, 1)); return 'norender'; },
+    syncIn: () => { window.SYNC?.signIn(); return 'norender'; },
+    syncOut: () => { if (!confirm('Sign out? This phone keeps its copy but stops syncing.')) return 'norender'; window.SYNC?.signOut(); return 'norender'; },
     reset: () => { if (!confirm('Erase all planner data on this device? Export a backup first if unsure.')) return; S = defaultState(); },
   };
 
@@ -751,5 +801,14 @@
 
   if (!S.settings.onboarded) ui.modal = { type: 'onboard' };
   render();
-  window.__planner = { get state() { return S; }, mergeState };
+  window.__planner = {
+    get state() { return S; },
+    mergeState, sameState, render,
+    // Merge a copy from the cloud into this device. Returns true if this device has changes the cloud lacks.
+    applyRemote(remote) {
+      const merged = mergeState(S, remote);
+      if (!sameState(merged, S)) { S = merged; localStorage.setItem(KEY, JSON.stringify(S)); if (S.settings.onboarded && ui.modal?.type === 'onboard') ui.modal = null; render(); }
+      return !sameState(S, remote);
+    },
+  };
 })();
